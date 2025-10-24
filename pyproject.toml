@@ -1,0 +1,96 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kde-cpi"
+version = "0.1.0"
+description = "Tools for ingesting BLS CPI flat files and loading them into PostgreSQL."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Jacob Bourne", email = "jacob.bourne@gmail.com" }]
+requires-python = ">=3.11"
+dependencies = [
+    "attrs>=25.4.0,<26",
+    "asyncpg>=0.30.0,<1",
+    "click>=8.3.0,<9",
+    "jupyterlab>=4.4.10,<5",
+    "marshmallow>=4.0.1,<5",
+    "matplotlib>=3.10.7,<4",
+    "numpy>=2.3.4,<3",
+    "pandas>=2.3.3,<3",
+    "requests>=2.32.5,<3",
+    "scikit-learn>=1.7.2,<2",
+    "scipy>=1.16.2,<2",
+]
+
+[project.scripts]
+kde-cpi = "cli.main:cli"
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+    "pytest-mock",
+    "pytest-asyncio",
+    "pytest-sugar",
+    "pytest-timeout",
+]
+dev = ["ruff", "mypy", "pre-commit", "types-requests"]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "C4"]
+ignore = ["E203", "S608"]
+preview = false
+
+[tool.ruff.lint.isort]
+known-first-party = ["kde_cpi"]
+combine-as-imports = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+strict_optional = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = ["src"]
+
+[tool.coverage.run]
+source = ["kde_cpi"]
+branch = true
+omit = ["tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
