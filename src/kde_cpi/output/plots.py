@@ -17,6 +17,35 @@ from ..math import (
 from ..math.utils import normalize_weights, to_numpy
 
 
+def _axis_limits(values: np.ndarray, *, clip: float = 0.995, padding: float = 0.05) -> tuple[float, float]:
+    """Return axis limits that clip extreme tails while preserving most observations."""
+    if values.size == 0:
+        return (-1.0, 1.0)
+    clip = min(max(clip, 0.5), 0.9999)
+    tail = (1.0 - clip) / 2.0
+    lower = np.quantile(values, tail)
+    upper = np.quantile(values, 1.0 - tail)
+    data_min = float(values.min())
+    data_max = float(values.max())
+    # Expand slightly so markers are not glued to the border.
+    span = upper - lower
+    if span <= 0:
+        span = max(abs(lower), abs(upper), 1.0)
+        lower -= span * 0.5
+        upper += span * 0.5
+    else:
+        margin = span * padding
+        lower -= margin
+        upper += margin
+    # Ensure we never clip past the actual min/max entirely.
+    lower = max(lower, data_min - span)
+    upper = min(upper, data_max + span)
+    if lower == upper:
+        lower -= 1.0
+        upper += 1.0
+    return float(lower), float(upper)
+
+
 @dataclass(frozen=True)
 class DensityPlotConfig:
     """Styling and annotation options for kernel density plots."""
@@ -124,6 +153,8 @@ def generate_density_plot(
     ax.set_title(config.title)
     ax.set_xlabel(config.xlabel)
     ax.set_ylabel(config.ylabel)
+    xmin, xmax = _axis_limits(vals)
+    ax.set_xlim(xmin * 100, xmax * 100)
 
     # Rug plot
     ax.scatter(
@@ -199,6 +230,8 @@ def generate_histogram_plot(
     ax.set_title(config.title)
     ax.set_xlabel(config.xlabel)
     ax.set_ylabel(config.ylabel)
+    xmin, xmax = _axis_limits(vals)
+    ax.set_xlim(xmin * 100, xmax * 100)
 
     ax.axvline(
         stats.weighted_mean * 100,

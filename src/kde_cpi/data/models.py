@@ -1,11 +1,11 @@
 """Domain models for BLS Consumer Price Index (CU) survey flat files."""
 
 from collections.abc import Iterable
-from dataclasses import asdict
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import marshmallow as ma
+from attrs import asdict as attrs_asdict
 from attrs import define, field
 
 
@@ -36,7 +36,9 @@ class AreaSchema(ma.Schema):
 
 def _to_bool(value: str) -> bool:
     """Normalize BLS truthy strings (T, Y, 1) into booleans."""
-    return value.strip().upper() in {"T", "TRUE", "1", "Y"}
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().upper() in {"T", "TRUE", "1", "Y"}
 
 
 @define(slots=True, frozen=True)
@@ -104,21 +106,22 @@ class FootnoteSchema(ma.Schema):
         return Footnote(**data)
 
 
-@define(slots=True, frozen=True)
+@define(slots=True, frozen=True, kw_only=True)
 class Series:
     """Metadata describing a CPI series and its structural attributes."""
 
-    series_id: str = field(converter=_strip)
-    area_code: str = field(converter=_strip)
-    item_code: str = field(converter=_strip)
-    seasonal: str = field(converter=_strip)
-    periodicity_code: str = field(converter=_strip)
-    base_code: str = field(converter=_strip)
-    base_period: str = field(converter=_strip)
-    begin_year: int = field(converter=int)
-    begin_period: str = field(converter=_strip)
-    end_year: int = field(converter=int)
-    end_period: str = field(converter=_strip)
+    series_id: str = field(converter=_strip, kw_only=False)
+    area_code: str = field(converter=_strip, kw_only=False)
+    item_code: str = field(converter=_strip, kw_only=False)
+    seasonal: str = field(converter=_strip, kw_only=False)
+    periodicity_code: str = field(converter=_strip, kw_only=False)
+    base_code: str = field(converter=_strip, kw_only=False)
+    base_period: str = field(converter=_strip, kw_only=False)
+    begin_year: int = field(converter=int, kw_only=False)
+    begin_period: str = field(converter=_strip, kw_only=False)
+    end_year: int = field(converter=int, kw_only=False)
+    end_period: str = field(converter=_strip, kw_only=False)
+    series_title: str = field(converter=_strip, default="")
 
     def is_seasonally_adjusted(self) -> bool:
         """Return True when the series is flagged as seasonally adjusted."""
@@ -129,6 +132,7 @@ class SeriesSchema(ma.Schema):
     """Marshmallow schema for :class:`Series`."""
 
     series_id = ma.fields.Str(required=True)
+    series_title = ma.fields.Str(required=False, allow_none=True, load_default="", dump_default="")
     area_code = ma.fields.Str(required=True)
     item_code = ma.fields.Str(required=True)
     seasonal = ma.fields.Str(required=True)
@@ -213,6 +217,21 @@ class Dataset:
     footnotes: dict[str, Footnote] = field(factory=dict)
     series: dict[str, Series] = field(factory=dict)
     observations: list[Observation] = field(factory=list)
+    _observation_keys: set[tuple[str, int, str]] = field(factory=set, init=False, repr=False)
+
+    def __attrs_post_init__(self) -> None:
+        """Populate the observation de-duplication index."""
+        if not self.observations:
+            return
+        unique: list[Observation] = []
+        for obs in self.observations:
+            key = (obs.series_id, obs.year, obs.period)
+            if key in self._observation_keys:
+                continue
+            self._observation_keys.add(key)
+            unique.append(obs)
+        if len(unique) != len(self.observations):
+            self.observations = unique
 
     def add_area(self, area: Area) -> None:
         """Insert or update an area in the dataset."""
@@ -235,17 +254,22 @@ class Dataset:
         self.series[series.series_id] = series
 
     def extend_observations(self, observations: Iterable[Observation]) -> None:
-        """Append observation records to the dataset."""
-        self.observations.extend(observations)
+        """Append observation records to the dataset, dropping duplicates."""
+        for obs in observations:
+            key = (obs.series_id, obs.year, obs.period)
+            if key in self._observation_keys:
+                continue
+            self._observation_keys.add(key)
+            self.observations.append(obs)
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-friendly representation of the dataset."""
         return {
-            "areas": [asdict(area) for area in self.areas.values()],
-            "items": [asdict(item) for item in self.items.values()],
-            "periods": [asdict(period) for period in self.periods.values()],
-            "footnotes": [asdict(footnote) for footnote in self.footnotes.values()],
-            "series": [asdict(series) for series in self.series.values()],
+            "areas": [attrs_asdict(area) for area in self.areas.values()],
+            "items": [attrs_asdict(item) for item in self.items.values()],
+            "periods": [attrs_asdict(period) for period in self.periods.values()],
+            "footnotes": [attrs_asdict(footnote) for footnote in self.footnotes.values()],
+            "series": [attrs_asdict(series) for series in self.series.values()],
             "observations": [
                 {
                     "series_id": obs.series_id,

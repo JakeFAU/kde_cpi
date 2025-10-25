@@ -6,7 +6,7 @@ from typing import Any
 import asyncpg
 from attrs import define, field
 
-from .models import Dataset, Observation, Series
+from .models import Area, Dataset, Footnote, Item, Observation, Period, Series
 
 
 @define(slots=True)
@@ -84,6 +84,7 @@ class CpiDatabaseLoader:
             f"""
             CREATE TABLE IF NOT EXISTS {qualified("cpi_series")} (
                 series_id text PRIMARY KEY,
+                series_title text NOT NULL DEFAULT '',
                 area_code text NOT NULL REFERENCES {qualified("cpi_area")} (area_code),
                 item_code text NOT NULL REFERENCES {qualified("cpi_item")} (item_code),
                 seasonal text NOT NULL,
@@ -95,6 +96,10 @@ class CpiDatabaseLoader:
                 end_year integer NOT NULL,
                 end_period text NOT NULL
             );
+            """,
+            f"""
+            ALTER TABLE {qualified("cpi_series")}
+                ADD COLUMN IF NOT EXISTS series_title text NOT NULL DEFAULT '';
             """,
             f"""
             CREATE TABLE IF NOT EXISTS {qualified("cpi_observation")} (
@@ -146,6 +151,118 @@ class CpiDatabaseLoader:
         """Synchronize metadata and upsert observations in place."""
         await self.sync_metadata(dataset)
         await self.upsert_observations(dataset.observations)
+
+    async def fetch_dataset(self) -> Dataset:
+        """Reconstruct a Dataset from the current database contents."""
+        conn = await self.connect()
+        dataset = Dataset()
+
+        area_rows = await conn.fetch(
+            f"SELECT area_code, area_name FROM {self._qualified('cpi_area')} ORDER BY area_code"
+        )
+        for row in area_rows:
+            dataset.add_area(Area(code=row["area_code"], name=row["area_name"]))
+
+        item_rows = await conn.fetch(
+            f"""
+            SELECT item_code, item_name, display_level, selectable, sort_sequence
+            FROM {self._qualified('cpi_item')}
+            ORDER BY item_code
+            """
+        )
+        for row in item_rows:
+            dataset.add_item(
+                Item(
+                    code=row["item_code"],
+                    name=row["item_name"],
+                    display_level=row["display_level"],
+                    selectable=row["selectable"],
+                    sort_sequence=row["sort_sequence"],
+                )
+            )
+
+        period_rows = await conn.fetch(
+            f"""
+            SELECT period_code, period_abbr, period_name
+            FROM {self._qualified('cpi_period')}
+            ORDER BY period_code
+            """
+        )
+        for row in period_rows:
+            dataset.add_period(
+                Period(code=row["period_code"], abbr=row["period_abbr"], name=row["period_name"])
+            )
+
+        footnote_rows = await conn.fetch(
+            f"""
+            SELECT footnote_code, footnote_text
+            FROM {self._qualified('cpi_footnote')}
+            ORDER BY footnote_code
+            """
+        )
+        for row in footnote_rows:
+            dataset.add_footnote(Footnote(code=row["footnote_code"], text=row["footnote_text"]))
+
+        series_rows = await conn.fetch(
+            f"""
+            SELECT series_id,
+                   series_title,
+                   area_code,
+                   item_code,
+                   seasonal,
+                   periodicity_code,
+                   base_code,
+                   base_period,
+                   begin_year,
+                   begin_period,
+                   end_year,
+                   end_period
+            FROM {self._qualified('cpi_series')}
+            ORDER BY series_id
+            """
+        )
+        for row in series_rows:
+            dataset.add_series(
+                Series(
+                    series_id=row["series_id"],
+                    series_title=row["series_title"] or "",
+                    area_code=row["area_code"],
+                    item_code=row["item_code"],
+                    seasonal=row["seasonal"],
+                    periodicity_code=row["periodicity_code"],
+                    base_code=row["base_code"],
+                    base_period=row["base_period"],
+                    begin_year=row["begin_year"],
+                    begin_period=row["begin_period"],
+                    end_year=row["end_year"],
+                    end_period=row["end_period"],
+                )
+            )
+
+        observation_rows = await conn.fetch(
+            f"""
+            SELECT series_id, year, period, value, footnotes
+            FROM {self._qualified('cpi_observation')}
+            ORDER BY series_id, year, period
+            """
+        )
+        observations: list[Observation] = []
+        for row in observation_rows:
+            decimal_value = row["value"]
+            text_value = "" if decimal_value is None else str(decimal_value)
+            footnotes = row["footnotes"] or []
+            footnote_str = " ".join(footnotes)
+            observations.append(
+                Observation(
+                    series_id=row["series_id"],
+                    year=row["year"],
+                    period=row["period"],
+                    value=text_value,
+                    footnotes=footnote_str,
+                )
+            )
+        dataset.extend_observations(observations)
+        return dataset
 
     async def upsert_observations(self, observations: Iterable[Observation]) -> None:
         """Upsert one or more observation rows."""
@@ -228,6 +345,7 @@ class CpiDatabaseLoader:
                 records=[
                     (
                         series.series_id,
+                        series.series_title,
                         series.area_code,
                         series.item_code,
                         series.seasonal,
@@ -243,6 +361,7 @@ class CpiDatabaseLoader:
                 ],
                 columns=[
                     "series_id",
+                    "series_title",
                     "area_code",
                     "item_code",
                     "seasonal",
@@ -352,10 +471,11 @@ class CpiDatabaseLoader:
             return
         query = f"""  # noqa: S608
         INSERT INTO {self._qualified("cpi_series")}
-            (series_id, area_code, item_code, seasonal, periodicity_code, base_code, base_period,
+            (series_id, series_title, area_code, item_code, seasonal, periodicity_code, base_code, base_period,
              begin_year, begin_period, end_year, end_period)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (series_id) DO UPDATE SET
+            series_title = EXCLUDED.series_title,
             area_code = EXCLUDED.area_code,
             item_code = EXCLUDED.item_code,
             seasonal = EXCLUDED.seasonal,
@@ -370,6 +490,7 @@ class CpiDatabaseLoader:
         args = [
             (
                 series.series_id,
+                series.series_title,
                 series.area_code,
                 series.item_code,
                 series.seasonal,

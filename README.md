@@ -11,18 +11,21 @@ Tools for downloading Bureau of Labor Statistics Consumer Price Index (CPI) flat
 ## Getting Started
 
 1. **Clone and enter the repo**
+
    ```bash
    git clone https://github.com/your-org/kde_cpi.git
    cd kde_cpi
    ```
 
 2. **Create and activate a virtual environment**
+
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
    ```
 
 3. **Install dependencies**
+
    ```bash
    pip install -e .
    # Optional extras
@@ -34,9 +37,10 @@ Tools for downloading Bureau of Labor Statistics Consumer Price Index (CPI) flat
 The included `docker-compose.yml` spins up:
 
 - `postgres`: PostgreSQL 18 with schema bootstrap scripts mounted from `init.d/`
-- `pgadmin`: pgAdmin4 UI reachable at http://localhost:5050 (default creds: `jacob.bourne@gmail.com` / `admin123`)
+- `pgadmin`: pgAdmin4 UI reachable at <http://localhost:5050> (default creds: `jacob.bourne@gmail.com` / `admin123`)
 
 To launch the stack:
+
 ```bash
 export POSTGRES_USER=kde_cpi \
        POSTGRES_PASSWORD=kde_cpi \
@@ -44,11 +48,14 @@ export POSTGRES_USER=kde_cpi \
 docker compose up -d
 ```
 
+> **Note:** The stack uses PostgreSQL 18, which expects persisted data at `/var/lib/postgresql`. If you previously ran an older version that stored data under `/var/lib/postgresql/data`, remove or rename the old Docker volume (for example via `docker compose down -v` or `docker volume rm kde_cpi_postgres-data`) before starting the containers to avoid initialization errors.
+
 After the containers are healthy you can connect to PostgreSQL at `postgresql://kde_cpi:kde_cpi@localhost:5432/kde_cpi`.
 
 ## CLI Usage
 
 Installing the project exposes the `kde-cpi` command. All commands accept `--dsn` and `--schema` (default `public`), or you can set environment variables:
+
 ```bash
 export KDE_CPI_DSN="postgresql://kde_cpi:kde_cpi@localhost:5432/kde_cpi"
 export KDE_CPI_SCHEMA="public"
@@ -63,6 +70,7 @@ Key commands:
 | `kde-cpi update-current` | Merge only the current-year partition into the database. |
 | `kde-cpi ensure-schema` | Create the CPI tables if they do not exist. |
 | `kde-cpi sync-metadata [--current-only] [--data-file …]` | Refresh mapping tables and series definitions without touching observations. |
+| `kde-cpi analyze [--group-by ...] [--source database|flatfiles] [...]` | Compute YoY growth distributions, render KDE/histogram plots, and save summaries (database by default). |
 
 Examples:
 
@@ -75,7 +83,39 @@ kde-cpi update-current
 
 # Grab a JSON snapshot without touching the database
 kde-cpi fetch-dataset --current-only --output out/current.json
+
+# Generate charts grouped by display level using PostgreSQL data
+kde-cpi analyze --group-by display-level --selectable-only
+
+# Bucket by item-code length using flat files
+kde-cpi analyze --source flatfiles --group-by item-code-length --output-dir out/analytics
 ```
+
+### Logging
+
+Structured logging is powered by `structlog` and controllable via CLI switches or env vars:
+
+```bash
+# Console-friendly logs at debug level
+kde-cpi --log-level debug --log-format console fetch-dataset --current-only
+
+# JSON logs, configured globally
+export KDE_CPI_LOG_LEVEL=info
+export KDE_CPI_LOG_FORMAT=json
+kde-cpi load-full --no-truncate
+```
+
+Error and warning events include stack traces, while debug logs trace HTTP fetches, parser stages, and pipeline orchestration.
+
+### Analysis Outputs
+
+`kde-cpi analyze` pulls CPI data from PostgreSQL by default (pass `--source flatfiles` to re-download from BLS), computes year-over-year growth for every series, and generates density + histogram plots per group. Artifacts land under a timestamped directory such as `out/analysis_display-level_20250309_154212/`, containing:
+
+- `summary.json` – top-level metadata, counts, and per-group stats
+- `group_<label>/density.png` & `histogram.png` – visualizations for each bucket
+- `group_<label>/summary.json` – stats + sample series for the bucket
+
+Use `--group-by display-level` (default) to bucket by CPI item display levels, or `--group-by item-code-length` to bucket by the length of CPI item codes (4-char vs 6-char, etc.). The legacy `series-name-length` synonym still works but will be removed later. Set `--include-unselectable` if you want to include non-published CPI components.
 
 ## Development
 
@@ -83,6 +123,7 @@ kde-cpi fetch-dataset --current-only --output out/current.json
 - Lint/format: `ruff check . && ruff format .`
 
 Shut down the Docker resources when finished:
+
 ```bash
 docker compose down
 ```

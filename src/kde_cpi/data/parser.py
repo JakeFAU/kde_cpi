@@ -7,6 +7,11 @@ from collections.abc import Iterable
 from .models import Area, Footnote, Item, Observation, Period, Series
 
 
+def _normalize_key(key: str) -> str:
+    """Normalize header names for case/whitespace inconsistencies."""
+    return key.strip().lower().replace(" ", "_")
+
+
 def _read_tsv(text: str) -> Iterable[dict[str, str]]:
     """Read a tab-separated payload into cleaned dictionaries."""
     buffer = io.StringIO(text)
@@ -17,7 +22,7 @@ def _read_tsv(text: str) -> Iterable[dict[str, str]]:
         # Skip bogus blank lines that may appear at EOF.
         if all(value is None or value.strip() == "" for value in row.values()):
             continue
-        yield {key: (value or "").strip() for key, value in row.items()}
+        yield {_normalize_key(key): (value or "").strip() for key, value in row.items()}
 
 
 def parse_areas(text: str) -> list[Area]:
@@ -54,95 +59,40 @@ def parse_footnotes(text: str) -> list[Footnote]:
     ]
 
 
-def _split_line(line: str) -> list[str]:
-    """Split fixed-width CPI rows by whitespace while trimming extra spaces."""
-    # Series and data files use whitespace-separated columns with a simple header row.
-    return line.strip().split()
-
-
 def parse_series(text: str) -> list[Series]:
-    """Parse CPI series metadata records from the fixed-width flat file."""
-    lines = [line for line in text.splitlines() if line.strip()]
-    if not lines:
-        return []
-
-    header = _split_line(lines[0])
-    expected_columns = [
-        "series_id",
-        "area_code",
-        "item_code",
-        "seasonal",
-        "periodicity_code",
-        "base_code",
-        "base_period",
-        "begin_year",
-        "begin_period",
-        "end_year",
-        "end_period",
-    ]
-    if header != expected_columns:
-        raise ValueError(f"Unexpected series header: {header!r}")
-
-    series: list[Series] = []
-    for line in lines[1:]:
-        parts = _split_line(line)
-        if len(parts) < 11:
-            continue
-        # base_period can occasionally contain spaces. Split logic: the last four tokens map to
-        # begin_year, begin_period, end_year, end_period respectively. Everything between
-        # base_code and begin_year belongs to base_period.
-        fixed = parts[:6]
-        tail = parts[6:]
-        if len(tail) < 5:
-            continue
-        base_period_tokens = tail[:-4]
-        if not base_period_tokens:
-            base_period_tokens = [""]
-        base_period = " ".join(base_period_tokens)
-        begin_year, begin_period, end_year, end_period = tail[-4:]
-        series.append(
+    """Parse CPI series metadata records from the flat file."""
+    result: list[Series] = []
+    for row in _read_tsv(text):
+        result.append(
             Series(
-                series_id=fixed[0],
-                area_code=fixed[1],
-                item_code=fixed[2],
-                seasonal=fixed[3],
-                periodicity_code=fixed[4],
-                base_code=fixed[5],
-                base_period=base_period,
-                begin_year=begin_year,
-                begin_period=begin_period,
-                end_year=end_year,
-                end_period=end_period,
+                series_id=row["series_id"],
+                series_title=row.get("series_title", ""),
+                area_code=row["area_code"],
+                item_code=row["item_code"],
+                seasonal=row["seasonal"],
+                periodicity_code=row["periodicity_code"],
+                base_code=row["base_code"],
+                base_period=row.get("base_period", ""),
+                begin_year=row.get("begin_year", "0"),
+                begin_period=row.get("begin_period", ""),
+                end_year=row.get("end_year", "0"),
+                end_period=row.get("end_period", ""),
             )
         )
-    return series
+    return result
 
 
 def parse_observations(text: str) -> list[Observation]:
     """Parse CPI observation records from the data files."""
-    lines = [line for line in text.splitlines() if line.strip()]
-    if not lines:
-        return []
-
-    header = _split_line(lines[0])
-    expected_columns = ["series_id", "year", "period", "value", "footnote_codes"]
-    if header != expected_columns:
-        raise ValueError(f"Unexpected data header: {header!r}")
-
     observations: list[Observation] = []
-    for line in lines[1:]:
-        parts = _split_line(line)
-        if len(parts) < 4:
-            continue
-        series_id, year, period, value, *footnote_tokens = parts
-        footnotes = " ".join(footnote_tokens)
+    for row in _read_tsv(text):
         observations.append(
             Observation(
-                series_id=series_id,
-                year=year,
-                period=period,
-                value=value,
-                footnotes=footnotes,
+                series_id=row["series_id"],
+                year=row["year"],
+                period=row["period"],
+                value=row["value"],
+                footnotes=row.get("footnote_codes", ""),
             )
         )
     return observations
