@@ -56,7 +56,7 @@ $$
 | Statistic        | Formula (weighted)                 | Strengths                                     | Limitations                      |
 | ---------------- | ---------------------------------- | --------------------------------------------- | -------------------------------- |
 | **Mean**         | μ = (Σ wᵢ xᵢ) / (Σ wᵢ)              | Simple, additive                              | Sensitive to outliers            |
-| **Median**       | Smallest *m* with cumulative weight ≥ 0.5 | Robust to extremes                            | Ignores multi-modality           |
+| **Median**       | Smallest *m* with cumulative weight ≥ (Σ wᵢ)/2 | Robust to extremes                            | Ignores multi-modality           |
 | **Trimmed Mean** | Mean after clipping tails          | Reduces tail effects                          | Requires arbitrary trim fraction |
 | **KDE Mode**     | x* = arg maxₓ f̂ₕ(x)               | Captures dominant behavior; multi-modal aware | Requires bandwidth tuning        |
 
