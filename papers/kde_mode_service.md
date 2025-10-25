@@ -53,12 +53,12 @@ $$
 
 ## 3. Comparing Measures of Central Tendency
 
-| Statistic        | Formula (weighted)                            | Strengths                                     | Limitations                      |
-| ---------------- | --------------------------------------------- | --------------------------------------------- | -------------------------------- |
-| **Mean**         | (\mu = \sum_i w_i x_i)                        | Simple, additive                              | Sensitive to outliers            |
-| **Median**       | Smallest (m) with cumulative weight (\ge 0.5) | Robust to extremes                            | Ignores multi-modality           |
-| **Trimmed Mean** | Mean after clipping tails                     | Reduces tail effects                          | Requires arbitrary trim fraction |
-| **KDE Mode**     | (x^* = \arg\max_x \hat{f}_h(x))               | Captures dominant behavior; multi-modal aware | Requires bandwidth tuning        |
+| Statistic        | Formula (weighted)                 | Strengths                                     | Limitations                      |
+| ---------------- | ---------------------------------- | --------------------------------------------- | -------------------------------- |
+| **Mean**         | μ = (Σ wᵢ xᵢ) / (Σ wᵢ)              | Simple, additive                              | Sensitive to outliers            |
+| **Median**       | Smallest *m* with cumulative weight ≥ (Σ wᵢ)/2 | Robust to extremes                            | Ignores multi-modality           |
+| **Trimmed Mean** | Mean after clipping tails          | Reduces tail effects                          | Requires arbitrary trim fraction |
+| **KDE Mode**     | x* = arg maxₓ f̂ₕ(x)               | Captures dominant behavior; multi-modal aware | Requires bandwidth tuning        |
 
 In inflation analysis, extreme swings in a few sectors (like energy or vehicles) can distort the mean or even the median. The KDE mode filters these out by focusing on the densest region of the weighted distribution—the inflation rate at which most components cluster.
 
@@ -73,6 +73,7 @@ The service computes a consistent suite of statistics:
 3. **Effective sample size** — *n_eff = 1 / Σ w_i^2*, which gauges statistical reliability.
 4. **KDE bandwidth** — estimated from Scott’s rule using the weighted standard deviation and interquartile range.
 5. **KDE mode** — located by evaluating
+
 $$
 \hat{f}_h(x)
 $$
