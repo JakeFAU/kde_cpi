@@ -135,15 +135,24 @@ Each observation includes: `series_id`, `year`, `period`, `value`, and normalize
 
 1. **Load Observations** — The system loads raw CPI data into memory, weighted by expenditure shares.
 2. **Normalize & Filter** — Missing values and unselectable items are removed.
-3. **Compute KDE** — A Gaussian KDE is applied over inflation rates (x_i) with weights (w_i):
+3. **Compute KDE** — A Gaussian KDE is applied over inflation rates \(x_i\) with weights \(w_i\):
 
-\[ \hat{f}_h(x) = \frac{1}{h} \sum_i w_i K\left( \frac{x - x_i}{h} \right), \quad K(u) = \frac{1}{\sqrt{2\pi}} e^{-u^2/2}. \]
+$$
+\hat{f}_h(x) = \frac{1}{h} \sum_i w_i K\!\left( \frac{x - x_i}{h} \right),
+\quad
+K(u) = \frac{1}{\sqrt{2\pi}} e^{-u^2 / 2}.
+$$
 
 4. **Bandwidth Selection** — Weighted Scott’s rule:
 
-\[ h = 0.9 \min(\sigma, \tfrac{\mathrm{IQR}}{1.34}) n_{\mathrm{eff}}^{-1/5}, \quad n_{\mathrm{eff}} = 1/\sum_i w_i^2. \]
+$$
+h = 0.9 \min\!\left(\sigma, \frac{\mathrm{IQR}}{1.34}\right)
+n_{\mathrm{eff}}^{-1/5}, \quad
+n_{\mathrm{eff}} = \frac{1}{\sum_i w_i^2}.
+$$
 
-5. **Locate Mode** — \(x^* = \arg\max_x \hat{f}_h(x)\) is the modal inflation rate.
+5. **Locate Mode** — \( x^* = \arg\max_x \hat{f}_h(x) \)
+
 6. **Summarize** — Output includes mean, median, trimmed mean, KDE mode, skewness, kurtosis, and effective sample size.
 
 ---

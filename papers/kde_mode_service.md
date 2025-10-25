@@ -22,27 +22,27 @@ kde-cpi stats --schema cpi_app --group-by area_code --output out/stats.json
 
 ## 2. Kernel Density Estimation Primer
 
-Given weighted observations $ \{(x_i, w_i)\}_{i=1}^n $ where $ \sum_i w_i = 1 $, the Gaussian kernel density estimate (KDE) approximates the underlying distribution by averaging local Gaussian bumps centered at each observation:
+Given weighted observations \( \{(x_i, w_i)\}_{i=1}^n \) with \( \sum_i w_i = 1 \), the Gaussian KDE is:
 
-\[
-\hat{f}*h(x) = \frac{1}{h} \sum*{i=1}^{n} w_i K\left(\frac{x - x_i}{h}\right), \qquad K(u) = \frac{1}{\sqrt{2\pi}} e^{-u^2/2}.
-\]
+$$
+\hat{f}_h(x) = \frac{1}{h} \sum_{i=1}^{n} w_i \, K\!\left(\frac{x - x_i}{h}\right),
+\qquad
+K(u) = \frac{1}{\sqrt{2\pi}} \exp\!\left(-\frac{u^2}{2}\right).
+$$
 
-Here (h > 0) is the *bandwidth* controlling smoothness: small (h) captures detail but amplifies noise, while large (h) oversmooths structure.
+Here \( h > 0 \) is the bandwidth.
 
-The bandwidth is chosen using a weighted version of Scott’s rule:
+Weighted Scott’s rule (with effective sample size \( n_{\text{eff}} = 1 / \sum_i w_i^2 \)):
 
-\[
-h = 0.9, \min\left(\sigma, \frac{\mathrm{IQR}}{1.34}\right) n_{\mathrm{eff}}^{-1/5}, \qquad n_{\mathrm{eff}} = \frac{1}{\sum_i w_i^2}.
-\]
+$$
+h = 0.9 \,\min\!\left(\sigma, \frac{\mathrm{IQR}}{1.34}\right)\, n_{\text{eff}}^{-1/5}.
+$$
 
-Once (\hat{f}_h(x)) is computed, the mode is the value (x^*) that maximizes the estimated density:
+The KDE mode is:
 
-\[
-x^* = \arg\max_x \hat{f}_h(x).
-\]
-
-This mode represents the most common inflation rate experienced by weighted CPI components.
+$$
+x^\star = \arg\max_x \, \hat{f}_h(x).
+$$
 
 ---
 
