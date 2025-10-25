@@ -9,6 +9,8 @@ from .models import Area, Footnote, Item, Observation, Period, Series
 
 def _normalize_key(key: str) -> str:
     """Normalize header names for case/whitespace inconsistencies."""
+    if key == "period_code":
+        return "period"
     return key.strip().lower().replace(" ", "_")
 
 
@@ -47,7 +49,11 @@ def parse_items(text: str) -> list[Item]:
 def parse_periods(text: str) -> list[Period]:
     """Parse the period lookup table with display names."""
     return [
-        Period(code=row["period"], abbr=row["period_abbr"], name=row["period_name"])
+        Period(
+            code=row["period"],
+            abbr=row["period_abbr"],
+            name=row["period_name"],
+        )
         for row in _read_tsv(text)
     ]
 

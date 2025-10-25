@@ -52,6 +52,11 @@ where = ["src"]
 pythonpath = ["src"]
 addopts = "-ra"
 testpaths = ["tests"]
+markers = [
+    "unit",
+    "integration",
+]
+
 
 [tool.ruff]
 line-length = 100
