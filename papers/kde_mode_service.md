@@ -70,7 +70,7 @@ The service computes a consistent suite of statistics:
 
 1. **Weighted moments** — mean, variance, skewness, and kurtosis computed from normalized weights.
 2. **Trimmed mean** — calculated using cumulative-weight clipping to reduce tail influence.
-3. **Effective sample size** — *n_eff = 1 / Σ wᵢ²*, which gauges statistical reliability.
+3. **Effective sample size** — *n_eff = 1 / Σ w_i^2*, which gauges statistical reliability.
 4. **KDE bandwidth** — estimated from Scott’s rule using the weighted standard deviation and interquartile range.
 5. **KDE mode** — located by evaluating *f̂ₕ(x)* over a grid (default: 2048 points).
 
