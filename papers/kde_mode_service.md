@@ -72,7 +72,11 @@ The service computes a consistent suite of statistics:
 2. **Trimmed mean** — calculated using cumulative-weight clipping to reduce tail influence.
 3. **Effective sample size** — *n_eff = 1 / Σ w_i^2*, which gauges statistical reliability.
 4. **KDE bandwidth** — estimated from Scott’s rule using the weighted standard deviation and interquartile range.
-5. **KDE mode** — located by evaluating *f̂ₕ(x)* over a grid (default: 2048 points).
+5. **KDE mode** — located by evaluating
+$$
+\hat{f}_h(x)
+$$
+over a grid (default: 2048 points).
 
 ```bash
 # Generate chart-ready KDE plots and histograms
