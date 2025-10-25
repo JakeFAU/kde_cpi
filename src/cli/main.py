@@ -404,7 +404,7 @@ def compute(
         )
         group_by_normalized = "item-code-length"
     if legacy_series_grouping and length_bin_size <= 0:
-        raise click.BadParameter("length-bin-size must be positive when using the legacy option.")
+        raise click.BadParameter("length-bin-size must be a positive integer when using the legacy option.")
 
     _validate_source_args(source, current_only=current_only, data_files=data_files)
 
