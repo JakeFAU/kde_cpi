@@ -2,7 +2,7 @@
 
 import pytest
 
-from kde_cpi.series.views import build_series_view_sql, SeriesViewManager
+from kde_cpi.series.views import SeriesViewManager, build_series_view_sql
 
 
 def test_build_series_view_sql():

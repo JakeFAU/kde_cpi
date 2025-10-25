@@ -1,7 +1,5 @@
 """Command line entry point for the kde-cpi application."""
 
-from __future__ import annotations
-
 import asyncio
 import json
 from collections import defaultdict
@@ -202,7 +200,11 @@ def fetch_dataset(
     _echo_dataset_summary("Fetched dataset", dataset)
     if output_path:
         _write_dataset(output_path, dataset)
-        cmd_log.info("dataset.written", output=str(output_path), records=len(dataset.observations))
+        cmd_log.info(
+            "dataset.written",
+            output=str(output_path),
+            records=len(dataset.observations),
+        )
 
 
 GROUP_BY_CHOICES = ("display-level", "item-code-length", "series-name-length")

@@ -98,4 +98,7 @@ ehthumbs.db
 .env.*
 secrets.json
 credentials.json
-out/*
+out/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/

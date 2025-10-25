@@ -1,8 +1,9 @@
 """Unit tests for the HTTP client."""
 
+from unittest.mock import MagicMock
+
 import pytest
 import requests
-from unittest.mock import MagicMock
 
 from kde_cpi.data.client import CpiHttpClient
 
@@ -33,9 +34,7 @@ def test_cpi_http_client_get_text_failure(mocker):
     mock_session = MagicMock()
     mock_response = MagicMock()
     mock_response.status_code = 404
-    mock_response.raise_for_status.side_effect = requests.HTTPError(
-        response=mock_response
-    )
+    mock_response.raise_for_status.side_effect = requests.HTTPError(response=mock_response)
     mock_session.get.return_value = mock_response
 
     client = CpiHttpClient()
