@@ -21,7 +21,6 @@ def configure_logging(
     json_output: bool = False,
 ) -> None:
     """Initialize structlog with a consistent processor chain."""
-
     normalized = level.lower()
     if normalized not in LOG_LEVELS:
         valid = ", ".join(sorted(LOG_LEVELS))

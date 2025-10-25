@@ -41,6 +41,15 @@ test = [
     "tox",
 ]
 dev = ["ruff", "mypy", "pre-commit", "types-requests"]
+doc = [
+    "sphinx",
+    "sphinx-autodoc-typehints",
+    "furo",
+    "sphinx-copybutton",
+    "sphinx-inline-tabs",
+    "myst-parser",
+    "sphinxcontrib-mermaid",
+]
 
 [tool.setuptools]
 package-dir = { "" = "src" }
