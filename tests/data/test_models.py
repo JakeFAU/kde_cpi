@@ -5,16 +5,16 @@ from decimal import Decimal
 import pytest
 
 from kde_cpi.data.models import (
-    _to_bool,
-    _footnote_tuple,
-    _decimal,
     Area,
-    Item,
-    Period,
-    Footnote,
-    Series,
-    Observation,
     Dataset,
+    Footnote,
+    Item,
+    Observation,
+    Period,
+    Series,
+    _decimal,
+    _footnote_tuple,
+    _to_bool,
 )
 
 

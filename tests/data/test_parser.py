@@ -1,14 +1,12 @@
 """Unit tests for the data parser."""
 
-import pytest
-
 from kde_cpi.data.parser import (
     parse_areas,
-    parse_items,
-    parse_periods,
     parse_footnotes,
-    parse_series,
+    parse_items,
     parse_observations,
+    parse_periods,
+    parse_series,
 )
 
 
@@ -61,9 +59,7 @@ def test_parse_series():
         "series_id\tarea_code\titem_code\tseasonal\tperiodicity_code\t"
         "base_code\tbase_period\tbegin_year\tbegin_period\tend_year\tend_period\n"
     )
-    text += (
-        "SUUR0000AA0\t0000\tAA0\tS\tS\tC\t1982-84=100\t1913\tM01\t2023\tM01\n"
-    )
+    text += "SUUR0000AA0\t0000\tAA0\tS\tS\tC\t1982-84=100\t1913\tM01\t2023\tM01\n"
     series = list(parse_series(text))
     assert len(series) == 1
     assert series[0].series_id == "SUUR0000AA0"
