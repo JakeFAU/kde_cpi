@@ -11,6 +11,7 @@ license = { text = "MIT" }
 authors = [{ name = "Jacob Bourne", email = "jacob.bourne@gmail.com" }]
 requires-python = ">=3.11"
 dependencies = [
+    "arrow>=1.4.0,<2",
     "attrs>=25.4.0,<26",
     "asyncpg>=0.30.0,<1",
     "click>=8.3.0,<9",
@@ -37,6 +38,7 @@ test = [
     "pytest-asyncio",
     "pytest-sugar",
     "pytest-timeout",
+    "tox",
 ]
 dev = ["ruff", "mypy", "pre-commit", "types-requests"]
 
