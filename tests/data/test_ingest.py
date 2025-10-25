@@ -30,7 +30,7 @@ def test_cpi_dataset_builder_load_dataset_by_dependencies(monkeypatch):
     monkeypatch.setattr(parser, "parse_periods",     lambda text: [])
     monkeypatch.setattr(parser, "parse_footnotes",   lambda text: [])
     monkeypatch.setattr(parser, "parse_series",      lambda text: [])
-    monkeypatch.setattr(parser, "parse_observations",lambda text: [])
+    monkeypatch.setattr(parser, "parse_observations", lambda text: [])
 
     dataset = builder.load_dataset()
     assert len(dataset.areas) == 1
