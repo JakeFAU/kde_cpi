@@ -50,6 +50,7 @@ jupyter_server_terminals==0.5.3
 jupyterlab==4.4.10
 jupyterlab_pygments==0.3.0
 jupyterlab_server==2.28.0
+-e git+ssh://git@github.com/JakeFAU/kde_cpi.git@981bed7d1b5d8206c075a74c6eeedae288934ccc#egg=kde_cpi
 kiwisolver==1.4.9
 lark==1.3.0
 MarkupSafe==3.0.3
@@ -79,6 +80,7 @@ prompt_toolkit==3.0.52
 psutil==7.1.1
 ptyprocess==0.7.0
 pure_eval==0.2.3
+pyarrow==22.0.0
 pycparser==2.23
 Pygments==2.19.2
 pyparsing==3.2.5

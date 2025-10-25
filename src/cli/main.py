@@ -23,6 +23,7 @@ from kde_cpi.data import (
     update_current_periods,
 )
 from kde_cpi.logging import configure_logging
+from kde_cpi.math import StatSummary, compute_statistics
 from kde_cpi.output import generate_density_plot, generate_histogram_plot
 from kde_cpi.output.utils import format_percent
 
@@ -38,6 +39,15 @@ LOG_LEVEL_CHOICES = ("critical", "error", "warning", "info", "debug")
 logger = structlog.get_logger(__name__)
 
 
+@dataclass(slots=True)
+class ObservationCache:
+    """Precomputed lookup tables for per-series observations."""
+
+    observations: dict[str, dict[tuple[int, str], Observation]]
+    latest: dict[str, tuple[tuple[int, str], Observation]]
+    periods: list[tuple[int, str]]
+
+
 @dataclass(frozen=True)
 class GrowthComponent:
     """Single YoY growth component derived from CPI series observations."""
@@ -48,6 +58,8 @@ class GrowthComponent:
     display_level: int
     series_title: str
     value: float
+    year: int
+    period: str
 
 
 def _require_dsn(ctx: click.Context, override: str | None) -> str:
@@ -269,14 +281,7 @@ def analyze(
         )
         group_by_normalized = "item-code-length"
 
-    if source == "database":
-        if data_files:
-            raise click.UsageError("--data-file is only valid when --source flatfiles.")
-        if current_only:
-            raise click.UsageError("--current-only is only valid when --source flatfiles.")
-    else:
-        if current_only and data_files:
-            raise click.UsageError("--current-only cannot be combined with --data-file.")
+    _validate_source_args(source, current_only=current_only, data_files=data_files)
     if legacy_series_grouping and length_bin_size <= 0:
         raise click.BadParameter("length-bin-size must be a positive integer.")
 
@@ -295,7 +300,11 @@ def analyze(
         dataset = _load_dataset_from_database(resolved_dsn, resolved_schema)
     else:
         dataset = _build_dataset(current_only=current_only, data_files=data_files or None)
-    components = _compute_growth_components(dataset, selectable_only=selectable_only)
+    components, _ = _compute_growth_components(
+        dataset,
+        selectable_only=selectable_only,
+        target_period=None,
+    )
     if not components:
         raise click.ClickException("No year-over-year components were available for analysis.")
 
@@ -320,6 +329,258 @@ def analyze(
     summary_path.write_text(json.dumps(summary_payload, indent=2))
     click.echo(f"Analysis artifacts written to {analysis_dir}")
     cmd_log.info("command.completed", output=str(analysis_dir), groups=len(group_summaries))
+
+
+@cli.command("compute")
+@click.option(
+    "--date",
+    help="Target month (YYYY-MM). Defaults to the latest available observations.",
+)
+@click.option(
+    "--group-by",
+    type=click.Choice(GROUP_BY_CHOICES, case_sensitive=False),
+    default="display-level",
+    show_default=True,
+    help="Grouping dimension for the summary.",
+)
+@click.option(
+    "--length-bin-size",
+    type=int,
+    default=5,
+    show_default=True,
+    help="Legacy bin size for series-name-length (deprecated).",
+)
+@click.option(
+    "--output",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Optional path to write the JSON summary.",
+)
+@click.option(
+    "--source",
+    type=click.Choice(["database", "flatfiles"], case_sensitive=False),
+    default="database",
+    show_default=True,
+    help="Source for CPI components prior to analysis.",
+)
+@click.option(
+    "--data-file",
+    "data_files",
+    multiple=True,
+    help=DATA_FILE_HELP,
+)
+@click.option(
+    "--current-only",
+    is_flag=True,
+    default=False,
+    help="Limit flatfile ingestion to the current partition.",
+)
+@click.option(
+    "--selectable-only/--include-unselectable",
+    default=True,
+    show_default=True,
+    help="Filter to selectable CPI items only.",
+)
+@click.pass_context
+def compute(
+    ctx: click.Context,
+    *,
+    date: str | None,
+    group_by: str,
+    length_bin_size: int,
+    output: Path | None,
+    source: str,
+    data_files: tuple[str, ...],
+    current_only: bool,
+    selectable_only: bool,
+) -> None:
+    """Compute KDE-mode inflation summary without generating plots."""
+    group_by_normalized = group_by.lower()
+    legacy_series_grouping = group_by_normalized == "series-name-length"
+    if legacy_series_grouping:
+        logger.warning(
+            "compute.group_by_legacy",
+            original="series-name-length",
+            replacement="item-code-length",
+        )
+        group_by_normalized = "item-code-length"
+    if legacy_series_grouping and length_bin_size <= 0:
+        raise click.BadParameter("length-bin-size must be positive when using the legacy option.")
+
+    _validate_source_args(source, current_only=current_only, data_files=data_files)
+
+    dataset, cache = _load_analysis_dataset(
+        ctx,
+        source=source,
+        current_only=current_only,
+        data_files=data_files,
+    )
+
+    target_period: tuple[int, str] | None = None
+    date_label = "latest"
+    if date:
+        year, period_code, dt = _parse_month(date)
+        target_period = (year, period_code)
+        date_label = dt.strftime("%Y-%m")
+    elif cache.periods:
+        latest_year, latest_period = cache.periods[-1]
+        date_label = _format_period_label(latest_year, latest_period)
+
+    components, _ = _compute_growth_components(
+        dataset,
+        selectable_only=selectable_only,
+        target_period=target_period,
+        cache=cache,
+    )
+    if not components:
+        raise click.ClickException("No components were available for the requested configuration.")
+
+    groups = _group_components(components, group_by_normalized, length_bin_size=length_bin_size)
+    summaries = [_build_group_summary(label, comps) for label, comps in groups.items() if comps]
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "date": date_label,
+        "group_by": group_by_normalized,
+        "source": source.lower(),
+        "selectable_only": selectable_only,
+        "component_count": len(components),
+        "group_count": len(summaries),
+        "groups": summaries,
+    }
+    document = json.dumps(payload, indent=2)
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(document)
+        click.echo(f"Wrote summary to {output}")
+    else:
+        click.echo(document)
+
+
+@cli.command("panel")
+@click.option("--start", required=True, help="Start month (YYYY-MM).")
+@click.option("--end", required=True, help="End month (YYYY-MM).")
+@click.option(
+    "--group-by",
+    type=click.Choice(GROUP_BY_CHOICES, case_sensitive=False),
+    default="display-level",
+    show_default=True,
+    help="Grouping dimension for the panel.",
+)
+@click.option(
+    "--length-bin-size",
+    type=int,
+    default=5,
+    show_default=True,
+    help="Legacy bin size for series-name-length (deprecated).",
+)
+@click.option(
+    "--export",
+    type=click.Path(dir_okay=False, path_type=Path),
+    required=True,
+    help="Destination file (.csv or .parquet).",
+)
+@click.option(
+    "--source",
+    type=click.Choice(["database", "flatfiles"], case_sensitive=False),
+    default="database",
+    show_default=True,
+    help="Source for CPI components prior to analysis.",
+)
+@click.option(
+    "--data-file",
+    "data_files",
+    multiple=True,
+    help=DATA_FILE_HELP,
+)
+@click.option(
+    "--current-only",
+    is_flag=True,
+    default=False,
+    help="Limit flatfile ingestion to the current partition.",
+)
+@click.option(
+    "--selectable-only/--include-unselectable",
+    default=True,
+    show_default=True,
+    help="Filter to selectable CPI items only.",
+)
+@click.pass_context
+def panel(
+    ctx: click.Context,
+    *,
+    start: str,
+    end: str,
+    group_by: str,
+    length_bin_size: int,
+    export: Path,
+    source: str,
+    data_files: tuple[str, ...],
+    current_only: bool,
+    selectable_only: bool,
+) -> None:
+    """Generate a tidy panel of KDE-mode metrics over a date range."""
+    group_by_normalized = group_by.lower()
+    legacy_series_grouping = group_by_normalized == "series-name-length"
+    if legacy_series_grouping:
+        logger.warning(
+            "panel.group_by_legacy",
+            original="series-name-length",
+            replacement="item-code-length",
+        )
+        group_by_normalized = "item-code-length"
+    if legacy_series_grouping and length_bin_size <= 0:
+        raise click.BadParameter("length-bin-size must be positive when using the legacy option.")
+
+    _validate_source_args(source, current_only=current_only, data_files=data_files)
+
+    start_year, start_period, start_dt = _parse_month(start)
+    end_year, end_period, end_dt = _parse_month(end)
+    months = _month_sequence(start_dt, end_dt)
+
+    dataset, cache = _load_analysis_dataset(
+        ctx,
+        source=source,
+        current_only=current_only,
+        data_files=data_files,
+    )
+
+    rows: list[dict[str, object]] = []
+    for year, period_code, dt in months:
+        components, cache = _compute_growth_components(
+            dataset,
+            selectable_only=selectable_only,
+            target_period=(year, period_code),
+            cache=cache,
+        )
+        if not components:
+            continue
+        groups = _group_components(components, group_by_normalized, length_bin_size=length_bin_size)
+        date_label = dt.strftime("%Y-%m")
+        for label, comps in groups.items():
+            if not comps:
+                continue
+            summary = _build_group_summary(label, comps)
+            rows.append(
+                _flatten_summary_row(
+                    date=date_label,
+                    group_label=label,
+                    summary=summary,
+                    group_by=group_by_normalized,
+                    selectable_only=selectable_only,
+                    source=source.lower(),
+                )
+            )
+
+    if not rows:
+        raise click.ClickException("No rows were produced for the requested range.")
+
+    export.parent.mkdir(parents=True, exist_ok=True)
+    if export.suffix.lower() == ".csv":
+        _write_csv(rows, export)
+    elif export.suffix.lower() in {".parquet", ".pq"}:
+        _write_parquet(rows, export)
+    else:
+        raise click.BadParameter("Export path must end with .csv or .parquet", param_hint="--export")
+    click.echo(f"Panel written to {export}")
 
 
 @cli.command("load-full")
@@ -489,6 +750,43 @@ def _create_analysis_dir(base: Path, group_by: str) -> Path:
             attempt += 1
 
 
+def _normalize_period(period: str) -> str:
+    """Normalize CPI period codes for consistent lookups."""
+    return period.strip().upper()
+
+
+def _period_rank(period: str) -> int:
+    """Return a sortable rank for CPI period codes (monthly-aware)."""
+    period = _normalize_period(period)
+    if len(period) >= 2 and period[1:].isdigit():
+        return int(period[1:])
+    return 0
+
+
+def _period_sort_key(year: int, period: str) -> tuple[int, int, str]:
+    """Provide a sorting tuple for period keys."""
+    return (year, _period_rank(period), _normalize_period(period))
+
+
+def _build_observation_cache(dataset: Dataset) -> ObservationCache:
+    """Precompute per-series observation lookups and metadata."""
+    observations: dict[str, dict[tuple[int, str], Observation]] = {}
+    latest: dict[str, tuple[tuple[int, str], Observation]] = {}
+    period_set: set[tuple[int, str]] = set()
+    for obs in dataset.observations:
+        period_code = _normalize_period(obs.period)
+        key = (obs.year, period_code)
+        period_set.add(key)
+        series_entries = observations.setdefault(obs.series_id, {})
+        series_entries[key] = obs
+        order_key = _period_sort_key(obs.year, period_code)
+        existing = latest.get(obs.series_id)
+        if existing is None or order_key > _period_sort_key(*existing[0]):
+            latest[obs.series_id] = (key, obs)
+    periods = sorted(period_set, key=lambda item: _period_sort_key(item[0], item[1]))
+    return ObservationCache(observations=observations, latest=latest, periods=periods)
+
+
 def _load_dataset_from_database(dsn: str, schema: str) -> Dataset:
     """Load CPI data from PostgreSQL into a Dataset."""
 
@@ -509,24 +807,36 @@ def _load_dataset_from_database(dsn: str, schema: str) -> Dataset:
     return dataset
 
 
-def _compute_growth_components(dataset: Dataset, *, selectable_only: bool) -> list[GrowthComponent]:
+def _compute_growth_components(
+    dataset: Dataset,
+    *,
+    selectable_only: bool,
+    target_period: tuple[int, str] | None = None,
+    cache: ObservationCache | None = None,
+) -> tuple[list[GrowthComponent], ObservationCache]:
     """Derive YoY growth components per series from the dataset."""
-    obs_lookup: dict[tuple[str, int, str], Observation] = {}
-    latest_by_series: dict[str, tuple[tuple[int, str], Observation]] = {}
-    for obs in dataset.observations:
-        key = (obs.series_id, obs.year, obs.period)
-        obs_lookup[key] = obs
-        order = (obs.year, obs.period)
-        current = latest_by_series.get(obs.series_id)
-        if current is None or order > current[0]:
-            latest_by_series[obs.series_id] = (order, obs)
-
+    cache = cache or _build_observation_cache(dataset)
     components: list[GrowthComponent] = []
-    for series_id, (_, latest) in latest_by_series.items():
-        previous = obs_lookup.get((series_id, latest.year - 1, latest.period))
+    normalized_target: tuple[int, str] | None = None
+    if target_period is not None:
+        normalized_target = (target_period[0], _normalize_period(target_period[1]))
+
+    for series_id, series_obs in cache.observations.items():
+        if normalized_target is not None:
+            current_key = normalized_target
+        else:
+            latest_entry = cache.latest.get(series_id)
+            if latest_entry is None:
+                continue
+            current_key = latest_entry[0]
+        current = series_obs.get(current_key)
+        if current is None:
+            continue
+        prev_key = (current_key[0] - 1, current_key[1])
+        previous = series_obs.get(prev_key)
         if previous is None:
             continue
-        value = _compute_yoy(latest, previous)
+        value = _compute_yoy(current, previous)
         if value is None:
             continue
         series = dataset.series.get(series_id)
@@ -545,10 +855,12 @@ def _compute_growth_components(dataset: Dataset, *, selectable_only: bool) -> li
                 display_level=item.display_level,
                 series_title=series.series_title,
                 value=value,
+                year=current.year,
+                period=_normalize_period(current.period),
             )
         )
     logger.debug("analysis.components_computed", count=len(components))
-    return components
+    return components, cache
 
 
 def _compute_yoy(current: Observation, previous: Observation) -> float | None:
@@ -605,7 +917,24 @@ def _render_group_reports(
     weights = [1.0] * len(components)
     density_report = generate_density_plot(values, weights, output_dir=group_dir, filename="density.png")
     histogram_report = generate_histogram_plot(values, weights, output_dir=group_dir, filename="histogram.png")
-    stats_payload = _stats_to_dict(density_report.statistics)
+    group_summary = _build_group_summary(label, components, stats=density_report.statistics)
+    group_summary["density_plot"] = str(density_report.path.relative_to(base_dir))
+    group_summary["histogram_plot"] = str(histogram_report.path.relative_to(base_dir))
+    (group_dir / "summary.json").write_text(json.dumps(group_summary, indent=2))
+    return group_summary
+
+
+def _build_group_summary(
+    label: str,
+    components: list[GrowthComponent],
+    *,
+    stats: StatSummary | None = None,
+) -> dict[str, object]:
+    """Create a JSON-friendly summary for a group of components."""
+    values = [comp.value for comp in components]
+    weights = [1.0] * len(components)
+    stats_obj = stats or compute_statistics(values, weights)
+    stats_payload = _stats_to_dict(stats_obj)
     top_examples = sorted(components, key=lambda comp: abs(comp.value), reverse=True)[:5]
     examples = [
         {
@@ -618,16 +947,129 @@ def _render_group_reports(
         }
         for comp in top_examples
     ]
-    group_summary = {
+    return {
         "label": label,
         "count": len(components),
         "stats": stats_payload,
-        "density_plot": str(density_report.path.relative_to(base_dir)),
-        "histogram_plot": str(histogram_report.path.relative_to(base_dir)),
         "examples": examples,
     }
-    (group_dir / "summary.json").write_text(json.dumps(group_summary, indent=2))
-    return group_summary
+
+
+def _parse_month(value: str) -> tuple[int, str, datetime]:
+    """Convert YYYY-MM strings into (year, period_code, datetime) tuples."""
+    try:
+        dt = datetime.strptime(value, "%Y-%m")
+    except ValueError as exc:  # pragma: no cover - defensive
+        raise ValueError(f"Invalid date '{value}'. Expected format YYYY-MM.") from exc
+    period = f"M{dt.month:02d}"
+    return dt.year, period, dt
+
+
+def _month_sequence(start: datetime, end: datetime) -> list[tuple[int, str, datetime]]:
+    """Return inclusive list of (year, period_code, datetime) between two dates."""
+    if start > end:
+        raise ValueError("start date must be before end date.")
+    months: list[tuple[int, str, datetime]] = []
+    cursor = datetime(start.year, start.month, 1, tzinfo=start.tzinfo)
+    end_marker = datetime(end.year, end.month, 1, tzinfo=end.tzinfo)
+    while cursor <= end_marker:
+        months.append((cursor.year, f"M{cursor.month:02d}", cursor))
+        if cursor.month == 12:
+            cursor = datetime(cursor.year + 1, 1, 1, tzinfo=cursor.tzinfo)
+        else:
+            cursor = datetime(cursor.year, cursor.month + 1, 1, tzinfo=cursor.tzinfo)
+    return months
+
+
+def _format_period_label(year: int, period: str) -> str:
+    """Return YYYY-MM style labels when possible."""
+    period = _normalize_period(period)
+    if period.startswith("M") and period[1:].isdigit():
+        return f"{year}-{int(period[1:]):02d}"
+    return f"{year}-{period}"
+
+
+def _load_analysis_dataset(
+    ctx: click.Context,
+    *,
+    source: str,
+    current_only: bool,
+    data_files: Sequence[str],
+) -> tuple[Dataset, ObservationCache]:
+    """Load CPI data from the requested source and build cache metadata."""
+    source = source.lower()
+    if source == "database":
+        resolved_dsn = _require_dsn(ctx, None)
+        resolved_schema = _resolve_schema(ctx, None)
+        dataset = _load_dataset_from_database(resolved_dsn, resolved_schema)
+    else:
+        dataset = _build_dataset(current_only=current_only, data_files=tuple(data_files) or None)
+    cache = _build_observation_cache(dataset)
+    return dataset, cache
+
+
+def _validate_source_args(source: str, *, current_only: bool, data_files: Sequence[str]) -> None:
+    """Enforce valid flag combinations for dataset sourcing."""
+    source = source.lower()
+    if source == "database":
+        if data_files:
+            raise click.UsageError("--data-file is only valid when --source flatfiles.")
+        if current_only:
+            raise click.UsageError("--current-only is only valid when --source flatfiles.")
+    else:
+        if current_only and data_files:
+            raise click.UsageError("--current-only cannot be combined with --data-file.")
+
+
+def _flatten_summary_row(
+    *,
+    date: str,
+    group_label: str,
+    summary: dict[str, object],
+    group_by: str,
+    selectable_only: bool,
+    source: str,
+) -> dict[str, object]:
+    """Flatten a group summary into a tabular row."""
+    stats = summary.get("stats", {})
+    return {
+        "date": date,
+        "group_label": group_label,
+        "group_by": group_by,
+        "selectable_only": selectable_only,
+        "source": source,
+        "count": summary.get("count", 0),
+        "mode": stats.get("weighted_kde_mode"),
+        "mode_percent": stats.get("weighted_kde_mode_percent"),
+        "mean": stats.get("weighted_mean"),
+        "median": stats.get("weighted_median"),
+        "trimmed_mean": stats.get("trimmed_mean"),
+        "std": stats.get("weighted_std"),
+        "skewness": stats.get("weighted_skewness"),
+        "kurtosis": stats.get("weighted_kurtosis"),
+        "effective_sample_size": stats.get("effective_sample_size"),
+    }
+
+
+def _write_csv(rows: list[dict[str, object]], path: Path) -> None:
+    """Write panel rows to CSV via pandas."""
+    import pandas as pd  # type: ignore
+
+    df = pd.DataFrame(rows)
+    df.to_csv(path, index=False)
+
+
+def _write_parquet(rows: list[dict[str, object]], path: Path) -> None:
+    """Write panel rows to parquet via pandas/pyarrow."""
+    import pandas as pd  # type: ignore
+
+    df = pd.DataFrame(rows)
+    try:
+        df.to_parquet(path, index=False)
+    except (ImportError, ValueError) as exc:  # pragma: no cover - optional deps
+        raise click.ClickException(
+            "Writing parquet requires pandas with pyarrow or fastparquet installed."
+        ) from exc
 
 
 def _stats_to_dict(stats) -> dict[str, object]:

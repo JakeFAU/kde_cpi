@@ -71,6 +71,8 @@ Key commands:
 | `kde-cpi ensure-schema` | Create the CPI tables if they do not exist. |
 | `kde-cpi sync-metadata [--current-only] [--data-file …]` | Refresh mapping tables and series definitions without touching observations. |
 | `kde-cpi analyze [--group-by ...] [--source database|flatfiles] [...]` | Compute YoY growth distributions, render KDE/histogram plots, and save summaries (database by default). |
+| `kde-cpi compute [--date YYYY-MM] [--group-by ...]` | Produce a JSON summary (no plots) for a single month/grouping. |
+| `kde-cpi panel --start YYYY-MM --end YYYY-MM --export out/panel.parquet` | Build a tidy panel of metrics across many months (CSV or Parquet). |
 
 Examples:
 
@@ -89,6 +91,12 @@ kde-cpi analyze --group-by display-level --selectable-only
 
 # Bucket by item-code length using flat files
 kde-cpi analyze --source flatfiles --group-by item-code-length --output-dir out/analytics
+
+# JSON summary for a specific month
+kde-cpi compute --date 2024-12 --group-by item-code-length --output out/summary_2024-12.json
+
+# Panel export between two dates (writes Parquet)
+kde-cpi panel --start 2023-01 --end 2024-12 --group-by display-level --export out/kde_panel.parquet
 ```
 
 ### Logging
@@ -116,6 +124,8 @@ Error and warning events include stack traces, while debug logs trace HTTP fetch
 - `group_<label>/summary.json` – stats + sample series for the bucket
 
 Use `--group-by display-level` (default) to bucket by CPI item display levels, or `--group-by item-code-length` to bucket by the length of CPI item codes (4-char vs 6-char, etc.). The legacy `series-name-length` synonym still works but will be removed later. Set `--include-unselectable` if you want to include non-published CPI components.
+
+`kde-cpi compute` shares the same grouping and source flags but skips plotting, returning a JSON payload with full statistics plus representative components. `kde-cpi panel` iterates month-by-month, flattening the summaries into a tidy table (CSV or Parquet) so you can downstream filter, chart, or feed dashboards.
 
 ## Development
 
