@@ -1,7 +1,7 @@
-cli package
-===========
+kde\_cpi.series package
+=======================
 
-.. automodule:: cli
+.. automodule:: kde_cpi.series
    :members:
    :show-inheritance:
    :undoc-members:
@@ -12,4 +12,4 @@ Submodules
 .. toctree::
    :maxdepth: 4
 
-   cli.main
+   kde_cpi.series.views
