@@ -417,7 +417,7 @@ I001 [*] Import block is un-sorted or un-formatted
   |
 1 |   """Utilities for building CPI series detail views in PostgreSQL."""
 2 |
-3 | / 
+3 | /
 4 | |
 5 | | import re
 6 | | from typing import Any, Optional, cast

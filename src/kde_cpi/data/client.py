@@ -3,8 +3,8 @@
 from urllib.parse import urljoin
 
 import requests
-from attrs import define, field
 import structlog
+from attrs import define, field
 
 from .files import BASE_URL
 

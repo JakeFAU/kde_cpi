@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import DivisionByZero, InvalidOperation
 from pathlib import Path
 
@@ -316,7 +316,7 @@ def analyze(
             continue
         group_summaries.append(_render_group_reports(analysis_dir, label, comps))
 
-    generated_at = datetime.now(timezone.utc)
+    generated_at = datetime.now(UTC)
     summary_payload = {
         "generated_at": generated_at.isoformat(),
         "group_by": group_by_normalized,
@@ -404,7 +404,9 @@ def compute(
         )
         group_by_normalized = "item-code-length"
     if legacy_series_grouping and length_bin_size <= 0:
-        raise click.BadParameter("length-bin-size must be a positive integer when using the legacy option.")
+        raise click.BadParameter(
+            "length-bin-size must be a positive integer when using the legacy option."
+        )
 
     _validate_source_args(source, current_only=current_only, data_files=data_files)
 
@@ -437,7 +439,7 @@ def compute(
     groups = _group_components(components, group_by_normalized, length_bin_size=length_bin_size)
     summaries = [_build_group_summary(label, comps) for label, comps in groups.items() if comps]
     payload = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "date": date_label,
         "group_by": group_by_normalized,
         "source": source.lower(),
@@ -579,7 +581,9 @@ def panel(
     elif export.suffix.lower() in {".parquet", ".pq"}:
         _write_parquet(rows, export)
     else:
-        raise click.BadParameter("Export path must end with .csv or .parquet", param_hint="--export")
+        raise click.BadParameter(
+            "Export path must end with .csv or .parquet", param_hint="--export"
+        )
     click.echo(f"Panel written to {export}")
 
 
@@ -737,7 +741,7 @@ def sync_metadata(
 
 def _create_analysis_dir(base: Path, group_by: str) -> Path:
     """Return a timestamped output directory for analysis artifacts."""
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     slug = group_by.replace("-", "_")
     attempt = 0
     while True:
@@ -895,6 +899,7 @@ def _group_components(
             groups[label].append(comp)
     else:
         raise ValueError(f"Unsupported group_by value: {group_by}")
+
     def sort_key(item: tuple[str, list[GrowthComponent]]) -> tuple[int, str]:
         label = item[0]
         for token in label.split():
@@ -915,8 +920,12 @@ def _render_group_reports(
     group_dir.mkdir(parents=True, exist_ok=True)
     values = [comp.value for comp in components]
     weights = [1.0] * len(components)
-    density_report = generate_density_plot(values, weights, output_dir=group_dir, filename="density.png")
-    histogram_report = generate_histogram_plot(values, weights, output_dir=group_dir, filename="histogram.png")
+    density_report = generate_density_plot(
+        values, weights, output_dir=group_dir, filename="density.png"
+    )
+    histogram_report = generate_histogram_plot(
+        values, weights, output_dir=group_dir, filename="histogram.png"
+    )
     group_summary = _build_group_summary(label, components, stats=density_report.statistics)
     group_summary["density_plot"] = str(density_report.path.relative_to(base_dir))
     group_summary["histogram_plot"] = str(histogram_report.path.relative_to(base_dir))
@@ -1025,13 +1034,18 @@ def _flatten_summary_row(
     *,
     date: str,
     group_label: str,
-    summary: dict[str, object],
+    summary: Mapping[str, object],
     group_by: str,
     selectable_only: bool,
     source: str,
 ) -> dict[str, object]:
     """Flatten a group summary into a tabular row."""
-    stats = summary.get("stats", {})
+    stats_value = summary.get("stats", {})
+    stats: dict[str, object]
+    if isinstance(stats_value, Mapping):
+        stats = dict(stats_value)
+    else:
+        stats = {}
     return {
         "date": date,
         "group_label": group_label,
@@ -1072,7 +1086,7 @@ def _write_parquet(rows: list[dict[str, object]], path: Path) -> None:
         ) from exc
 
 
-def _stats_to_dict(stats) -> dict[str, object]:
+def _stats_to_dict(stats: StatSummary) -> dict[str, object]:
     """Convert a StatSummary into JSON-friendly primitives."""
     return {
         "weighted_mean": stats.weighted_mean,

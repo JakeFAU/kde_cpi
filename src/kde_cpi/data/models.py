@@ -5,8 +5,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import marshmallow as ma
-from attrs import asdict as attrs_asdict
-from attrs import define, field
+from attrs import asdict as attrs_asdict, define, field
 
 
 def _strip(value: str) -> str:

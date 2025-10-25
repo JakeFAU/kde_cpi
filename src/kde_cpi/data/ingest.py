@@ -2,8 +2,8 @@
 
 from collections.abc import Iterable, Sequence
 
-from attrs import define, field
 import structlog
+from attrs import define, field
 
 from . import parser
 from .client import CpiHttpClient
