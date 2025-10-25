@@ -6,13 +6,13 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import ArrayLike
 
-from .utils import normalize_weights, sort_by_values, to_numpy
+from .utils import FloatArray, normalize_weights, sort_by_values, to_numpy
 
 
 def _validate_inputs(
     values: ArrayLike,
     weights: ArrayLike,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[FloatArray, FloatArray]:
     """Normalize inputs to aligned 1D arrays and validate shapes."""
     vals = to_numpy(values)
     wts = normalize_weights(weights)
@@ -29,7 +29,7 @@ def weighted_mean(values: ArrayLike, weights: ArrayLike) -> float:
     return float(np.dot(vals, wts))
 
 
-def _weighted_quantile(values: np.ndarray, weights: np.ndarray, quantile: float) -> float:
+def _weighted_quantile(values: FloatArray, weights: FloatArray, quantile: float) -> float:
     """Return the weighted quantile using the cumulative weight approach."""
     sorted_vals, sorted_wts = sort_by_values(values, weights)
     cum = np.cumsum(sorted_wts)
@@ -127,9 +127,10 @@ def weighted_kde_bandwidth(values: ArrayLike, weights: ArrayLike) -> float:
     return float(0.9 * scale * ess ** (-1.0 / 5.0))
 
 
-def _gaussian_kernel(u: np.ndarray) -> np.ndarray:
+def _gaussian_kernel(u: FloatArray) -> FloatArray:
     """Evaluate the standard Gaussian kernel."""
-    return np.exp(-0.5 * u * u) / math.sqrt(2.0 * math.pi)
+    kernel = np.exp(-0.5 * np.square(u), dtype=np.float64)
+    return kernel / math.sqrt(2.0 * math.pi)
 
 
 def weighted_kde_mode(

@@ -17,7 +17,9 @@ from ..math import (
 from ..math.utils import normalize_weights, to_numpy
 
 
-def _axis_limits(values: np.ndarray, *, clip: float = 0.995, padding: float = 0.05) -> tuple[float, float]:
+def _axis_limits(
+    values: np.ndarray, *, clip: float = 0.995, padding: float = 0.05
+) -> tuple[float, float]:
     """Return axis limits that clip extreme tails while preserving most observations."""
     if values.size == 0:
         return (-1.0, 1.0)
@@ -58,7 +60,7 @@ class DensityPlotConfig:
     line_width: float = 2.5
     statistic_line_style: dict[str, dict[str, object]] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Populate default styles when none are provided."""
         if self.statistic_line_style is None:
             object.__setattr__(

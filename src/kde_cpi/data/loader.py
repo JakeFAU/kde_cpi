@@ -166,7 +166,7 @@ class CpiDatabaseLoader:
         item_rows = await conn.fetch(
             f"""
             SELECT item_code, item_name, display_level, selectable, sort_sequence
-            FROM {self._qualified('cpi_item')}
+            FROM {self._qualified("cpi_item")}
             ORDER BY item_code
             """
         )
@@ -184,7 +184,7 @@ class CpiDatabaseLoader:
         period_rows = await conn.fetch(
             f"""
             SELECT period_code, period_abbr, period_name
-            FROM {self._qualified('cpi_period')}
+            FROM {self._qualified("cpi_period")}
             ORDER BY period_code
             """
         )
@@ -196,7 +196,7 @@ class CpiDatabaseLoader:
         footnote_rows = await conn.fetch(
             f"""
             SELECT footnote_code, footnote_text
-            FROM {self._qualified('cpi_footnote')}
+            FROM {self._qualified("cpi_footnote")}
             ORDER BY footnote_code
             """
         )
@@ -217,7 +217,7 @@ class CpiDatabaseLoader:
                    begin_period,
                    end_year,
                    end_period
-            FROM {self._qualified('cpi_series')}
+            FROM {self._qualified("cpi_series")}
             ORDER BY series_id
             """
         )
@@ -242,7 +242,7 @@ class CpiDatabaseLoader:
         observation_rows = await conn.fetch(
             f"""
             SELECT series_id, year, period, value, footnotes
-            FROM {self._qualified('cpi_observation')}
+            FROM {self._qualified("cpi_observation")}
             ORDER BY series_id, year, period
             """
         )
@@ -471,8 +471,10 @@ class CpiDatabaseLoader:
             return
         query = f"""  # noqa: S608
         INSERT INTO {self._qualified("cpi_series")}
-            (series_id, series_title, area_code, item_code, seasonal, periodicity_code, base_code, base_period,
-             begin_year, begin_period, end_year, end_period)
+            (
+                series_id, series_title, area_code, item_code, seasonal, periodicity_code,
+                base_code, base_period, begin_year, begin_period, end_year, end_period
+            )
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         ON CONFLICT (series_id) DO UPDATE SET
             series_title = EXCLUDED.series_title,
