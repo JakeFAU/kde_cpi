@@ -22,7 +22,12 @@ kde-cpi stats --schema cpi_app --group-by area_code --output out/stats.json
 
 ## 2. Kernel Density Estimation Primer
 
-Given weighted observations \( \{(x_i, w_i)\}_{i=1}^n \) with \( \sum_i w_i = 1 \), the Gaussian KDE is:
+Given weighted observations
+$$
+\{(x_i, w_i)\}_{i=1}^n \quad \text{with} \quad \sum_i w_i = 1,
+$$
+
+the Gaussian KDE is:
 
 $$
 \hat{f}_h(x) = \frac{1}{h} \sum_{i=1}^{n} w_i \, K\!\left(\frac{x - x_i}{h}\right),
@@ -63,11 +68,15 @@ In inflation analysis, extreme swings in a few sectors (like energy or vehicles)
 
 The service computes a consistent suite of statistics:
 
-1. **Weighted moments**: mean, variance, skewness, and kurtosis from normalized weights.
-2. **Trimmed mean**: using cumulative-weight clipping to reduce tail influence.
-3. **Effective sample size** (n_{\mathrm{eff}} = 1/\sum_i w_i^2) to gauge statistical reliability.
-4. **KDE bandwidth**: computed from Scott’s rule using the weighted standard deviation and interquartile range.
-5. **KDE mode**: located by evaluating (\hat{f}_h(x)) over a grid (default 2048 points).
+1. **Weighted moments** — mean, variance, skewness, and kurtosis computed from normalized weights.
+2. **Trimmed mean** — calculated using cumulative-weight clipping to reduce tail influence.
+3. **Effective sample size** — *n_eff = 1 / Σ w_i^2*, which gauges statistical reliability.
+4. **KDE bandwidth** — estimated from Scott’s rule using the weighted standard deviation and interquartile range.
+5. **KDE mode** — located by evaluating
+$$
+\hat{f}_h(x)
+$$
+over a grid (default: 2048 points).
 
 ```bash
 # Generate chart-ready KDE plots and histograms
