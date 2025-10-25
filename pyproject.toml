@@ -43,6 +43,7 @@ test = [
 dev = ["ruff", "mypy", "pre-commit", "types-requests"]
 doc = [
     "sphinx",
+    "sphinx-apidoc",
     "sphinx-autodoc-typehints",
     "furo",
     "sphinx-copybutton",

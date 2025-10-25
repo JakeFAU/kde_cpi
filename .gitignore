@@ -103,7 +103,7 @@ out/
 .pytest_cache/
 .ruff_cache/
 
-# Spinx
+# Sphinx build and generated API docs
 docs/_build/
 docs/api/
 !docs/api/.gitkeep
