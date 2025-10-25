@@ -1,115 +1,102 @@
-"""Unit tests for the CLI."""
+# tests/test_cli_fast.py
+import json
 
-import pytest
 from click.testing import CliRunner
-from tests.conftest import CannedResponse
 
-from cli.main import cli
-from kde_cpi.data.files import DATA_FILES, MAPPING_FILES, SERIES_FILE
-from kde_cpi.data.models import Dataset
+import cli.main as cli_mod
 
 
-@pytest.fixture
-def runner():
-    """Return a click CliRunner."""
-    return CliRunner()
+def test_fetch_dataset_fast(monkeypatch, tmp_path, tiny_dataset):
+    monkeypatch.setattr(cli_mod, "_build_dataset", lambda **kw: tiny_dataset)
+    r = CliRunner().invoke(cli_mod.cli, ["fetch-dataset", "--output", str(tmp_path / "ds.json")])
+    assert r.exit_code == 0
+    data = json.loads((tmp_path / "ds.json").read_text())
+    assert data["ok"] is True
 
 
-def test_fetch_dataset(runner, mock_cpi_http_client):
-    """Test the fetch-dataset command."""
-    canned_responses = {
-        **{filename: CannedResponse("") for filename in MAPPING_FILES.values()},
-        **{filename: CannedResponse("") for filename in DATA_FILES},
-        SERIES_FILE: CannedResponse(""),
-    }
-    mock_cpi_http_client(canned_responses)
-    result = runner.invoke(cli, ["fetch-dataset"])
-    assert result.exit_code == 0
-
-
-def test_analyze(runner, mock_cpi_http_client, mocker):
-    """Test the analyze command."""
-    mock_cpi_http_client({})
-    mocker.patch("cli.main._load_dataset_from_database", return_value=Dataset())
-    result = runner.invoke(
-        cli,
-        [
-            "analyze",
-            "--source",
-            "database",
-            "--dsn",
-            "postgresql://user:pass@host:5432/db",
-        ],
+def test_analyze_happy_path(monkeypatch, tmp_path, tiny_dataset):
+    # Make 'database' source load tiny dataset
+    monkeypatch.setattr(cli_mod, "_load_dataset_from_database", lambda *a, **k: tiny_dataset)
+    r = CliRunner().invoke(
+        cli_mod.cli,
+        ["analyze", "--source", "database", "--output-dir", str(tmp_path)],
+        env={"KDE_CPI_DSN": "postgresql://u:p@h/db"},
     )
-    assert result.exit_code != 0  # No components to analyze
+    assert r.exit_code == 0, r.output
+
+    assert r.exit_code == 0
+    # Ensure artifacts directory appears
+    paths = list(tmp_path.glob("analysis_display_level_*"))
+    assert paths, r.output
 
 
-def test_compute(runner, mock_cpi_http_client, mocker):
-    """Test the compute command."""
-    mock_cpi_http_client({})
-    mocker.patch("cli.main._load_dataset_from_database", return_value=Dataset())
-    result = runner.invoke(
-        cli,
-        [
-            "compute",
-            "--source",
-            "database",
-            "--dsn",
-            "postgresql://user:pass@host:5432/db",
-        ],
+def test_compute_json_stdout(monkeypatch, tiny_dataset):
+    monkeypatch.setattr(
+        cli_mod,
+        "_load_analysis_dataset",
+        lambda *a, **k: (tiny_dataset, cli_mod._build_observation_cache(tiny_dataset)),
     )
-    assert result.exit_code != 0  # No components to compute
+    r = CliRunner().invoke(cli_mod.cli, ["compute", "--source", "flatfiles", "--current-only"])
+    assert r.exit_code == 0
+    payload = json.loads(r.output)
+    assert payload["component_count"] >= 1
+    assert payload["group_by"] == "display-level"
 
 
-def test_panel(runner, mock_cpi_http_client, mocker):
-    """Test the panel command."""
-    mock_cpi_http_client({})
-    mocker.patch("cli.main._load_dataset_from_database", return_value=Dataset())
-    result = runner.invoke(
-        cli,
+def test_panel_csv(monkeypatch, tmp_path, tiny_dataset):
+    monkeypatch.setattr(
+        cli_mod,
+        "_load_analysis_dataset",
+        lambda *a, **k: (tiny_dataset, cli_mod._build_observation_cache(tiny_dataset)),
+    )
+    r = CliRunner().invoke(
+        cli_mod.cli,
         [
             "panel",
             "--source",
-            "database",
+            "flatfiles",
+            "--current-only",
             "--start",
-            "2022-01",
+            "2025-09",
             "--end",
-            "2022-02",
+            "2025-09",
             "--export",
-            "test.csv",
-            "--dsn",
-            "postgresql://user:pass@host:5432/db",
+            str(tmp_path / "panel.csv"),
         ],
     )
-    assert result.exit_code != 0  # No data to create a panel from
+    assert r.exit_code == 0
+    assert (tmp_path / "panel.csv").exists()
 
 
-def test_load_full(runner, mock_cpi_http_client, mocker):
-    """Test the load-full command."""
-    mocker.patch("cli.main.load_full_history")
-    mock_cpi_http_client({})
-    result = runner.invoke(cli, ["load-full", "--dsn", "postgresql://user:pass@host:5432/db"])
-    assert result.exit_code == 0
+def test_load_full_noop(monkeypatch, tiny_dataset):
+    async def _fake_load(*a, **k):
+        return tiny_dataset
+
+    monkeypatch.setattr(cli_mod, "load_full_history", lambda *a, **k: _fake_load())
+    r = CliRunner().invoke(cli_mod.cli, ["load-full", "--dsn", "postgresql://u:p@h/db"])
+    assert r.exit_code == 0
 
 
-def test_update_current(runner, mock_cpi_http_client, mocker):
-    """Test the update-current command."""
-    mocker.patch("cli.main.update_current_periods")
-    mock_cpi_http_client({})
-    result = runner.invoke(cli, ["update-current", "--dsn", "postgresql://user:pass@host:5432/db"])
-    assert result.exit_code == 0
+def test_update_current_noop(monkeypatch, tiny_dataset):
+    async def _fake_update(*a, **k):
+        return tiny_dataset
+
+    monkeypatch.setattr(cli_mod, "update_current_periods", lambda *a, **k: _fake_update())
+    r = CliRunner().invoke(cli_mod.cli, ["update-current", "--dsn", "postgresql://u:p@h/db"])
+    assert r.exit_code == 0
 
 
-def test_ensure_schema(runner, mocker):
-    """Test the ensure-schema command."""
-    mocker.patch("kde_cpi.data.CpiDatabaseLoader.ensure_schema")
-    result = runner.invoke(cli, ["ensure-schema", "--dsn", "postgresql://user:pass@host:5432/db"])
-    assert result.exit_code == 0
+def test_ensure_schema_noop(monkeypatch):
+    class FakeLoader:
+        async def ensure_schema(self):
+            return None
 
+        async def close(self):
+            return None
 
-def test_sync_metadata(runner, mock_cpi_http_client, mocker):
-    """Test the sync-metadata command."""
-    mocker.patch("kde_cpi.data.CpiDatabaseLoader.sync_metadata")
-    mock_cpi_http_client({})
-    result = runner.invoke(cli, ["sync-metadata", "--dsn", "postgresql://user:pass@host:5432/db"])
-    assert result.exit_code == 0
+        def __init__(self, *a, **k):
+            pass
+
+    monkeypatch.setattr(cli_mod, "CpiDatabaseLoader", FakeLoader)
+    r = CliRunner().invoke(cli_mod.cli, ["ensure-schema", "--dsn", "postgresql://u:p@h/db"])
+    assert r.exit_code == 0

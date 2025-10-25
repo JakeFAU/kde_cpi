@@ -101,10 +101,12 @@ module = ["tests.*"]
 ignore_errors = true
 
 [tool.coverage.run]
-source = ["kde_cpi"]
+source = ["kde_cpi", "cli"]
 branch = true
 omit = ["tests/*"]
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+omit = ["*/__main__.py"]
+exclude_lines = ["if __name__ == .__main__.:", "# pragma: no cover"]
