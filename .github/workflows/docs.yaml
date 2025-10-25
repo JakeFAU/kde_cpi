@@ -34,7 +34,6 @@ jobs:
       - name: Install deps (project + docs)
         run: |
           pip install -e .[dev,doc]
-          pip install -r requirements.txt
 
       - name: Generate API stubs (sphinx-apidoc)
         run: |
