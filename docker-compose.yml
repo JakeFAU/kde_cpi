@@ -25,6 +25,17 @@ services:
     volumes:
       - pgadmin-data:/var/lib/pgadmin
 
+  duckdb:
+    image: datacatering/duckdb:v1.4.1
+    container_name: kde-cpi-duckdb
+    stdin_open: true
+    tty: true
+    working_dir: /data
+    volumes:
+      - duckdb-data:/data
+      - ./:/workspace:ro
+
 volumes:
   postgres-data:
   pgadmin-data:
+  duckdb-data:
