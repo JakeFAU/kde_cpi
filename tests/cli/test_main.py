@@ -68,6 +68,33 @@ def test_panel_csv(monkeypatch, tmp_path, tiny_dataset):
     assert (tmp_path / "panel.csv").exists()
 
 
+def test_metrics_timeseries_csv(monkeypatch, tmp_path, tiny_dataset):
+    monkeypatch.setattr(
+        cli_mod,
+        "_load_analysis_dataset",
+        lambda *a, **k: (tiny_dataset, cli_mod._build_observation_cache(tiny_dataset)),
+    )
+    output_path = tmp_path / "ts.csv"
+    r = CliRunner().invoke(
+        cli_mod.cli,
+        [
+            "metrics-timeseries",
+            "--source",
+            "flatfiles",
+            "--current-only",
+            "--start",
+            "2025-09",
+            "--end",
+            "2025-09",
+            "--export",
+            str(output_path),
+        ],
+    )
+    assert r.exit_code == 0, r.output
+    contents = output_path.read_text()
+    assert "weighted_kde_mode" in contents
+
+
 def test_load_full_noop(monkeypatch, tiny_dataset):
     async def _fake_load(*a, **k):
         return tiny_dataset
