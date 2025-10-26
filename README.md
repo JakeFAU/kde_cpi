@@ -40,7 +40,7 @@ Tools for downloading Bureau of Labor Statistics Consumer Price Index (CPI) flat
 The included `docker-compose.yml` spins up:
 
 - `postgres`: PostgreSQL 18 with schema bootstrap scripts mounted from `init.d/`
-- `pgadmin`: pgAdmin4 UI reachable at <http://localhost:5050> (default creds: `jacob.bourne@gmail.com` / `admin123`)
+- `pgadmin`: pgAdmin4 UI reachable at <http://localhost:5050> (default creds: set by env vars)
 
 To launch the stack:
 
