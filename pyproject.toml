@@ -40,7 +40,7 @@ test = [
     "pytest-timeout",
     "tox",
 ]
-dev = ["ruff", "mypy", "pre-commit", "types-requests", "bump-my-version>=1.1,<2"]
+dev = ["ruff", "mypy", "pre-commit", "types-requests", "bump2version"]
 doc = [
     "sphinx",
     "sphinx-autodoc-typehints",

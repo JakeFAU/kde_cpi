@@ -1,5 +1,6 @@
 # KDE CPI
 
+[![PyPI version](https://badge.fury.io/py/kde-cpi.svg)](https://pypi.org/project/kde-cpi/)
 [![docs](https://img.shields.io/badge/docs-latest-blue)](https://jakefau.github.io/kde_cpi/)
 
 Tools for downloading Bureau of Labor Statistics Consumer Price Index (CPI) flat files, loading them into PostgreSQL, and generating useful summaries via a unified Click-based CLI.
