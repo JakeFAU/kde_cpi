@@ -105,5 +105,5 @@ out/
 
 # Sphinx build and generated API docs
 docs/_build/
-docs/api/*.rst
+docs/api/*
 !docs/api/.gitkeep
