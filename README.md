@@ -75,6 +75,7 @@ Key commands:
 | `kde-cpi analyze [--group-by ...] [--source database|flatfiles] [...]` | Compute YoY growth distributions, render KDE/histogram plots, and save summaries (database by default). |
 | `kde-cpi compute [--date YYYY-MM] [--group-by ...]` | Produce a JSON summary (no plots) for a single month/grouping. |
 | `kde-cpi panel --start YYYY-MM --end YYYY-MM --export out/panel.parquet` | Build a tidy panel of metrics across many months (CSV or Parquet). |
+| `kde-cpi metrics-timeseries --start YYYY-MM --end YYYY-MM --export out/metrics.csv` | Export a single time series of KDE metrics to study stability over time. |
 
 Examples:
 
@@ -99,6 +100,9 @@ kde-cpi compute --date 2024-12 --group-by item-code-length --output out/summary_
 
 # Panel export between two dates (writes Parquet)
 kde-cpi panel --start 2023-01 --end 2024-12 --group-by display-level --export out/kde_panel.parquet
+
+# Overall KDE metrics as a tidy time series (CSV)
+kde-cpi metrics-timeseries --start 2020-01 --end 2024-12 --export out/mode_timeseries.csv
 ```
 
 ### Logging
@@ -127,7 +131,7 @@ Error and warning events include stack traces, while debug logs trace HTTP fetch
 
 Use `--group-by display-level` (default) to bucket by CPI item display levels, or `--group-by item-code-length` to bucket by the length of CPI item codes (4-char vs 6-char, etc.). The legacy `series-name-length` synonym still works but will be removed later. Set `--include-unselectable` if you want to include non-published CPI components.
 
-`kde-cpi compute` shares the same grouping and source flags but skips plotting, returning a JSON payload with full statistics plus representative components. `kde-cpi panel` iterates month-by-month, flattening the summaries into a tidy table (CSV or Parquet) so you can downstream filter, chart, or feed dashboards.
+`kde-cpi compute` shares the same grouping and source flags but skips plotting, returning a JSON payload with full statistics plus representative components. `kde-cpi panel` iterates month-by-month, flattening the summaries into a tidy table (CSV or Parquet) so you can downstream filter, chart, or feed dashboards. When you just need one consolidated view of how the core KDE metrics evolve through time, `kde-cpi metrics-timeseries` emits a pandas-friendly CSV/Parquet with one row per month covering the mode, mean, median, trimmed mean, dispersion, and higher moments.
 
 ## Development
 

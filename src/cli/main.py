@@ -536,8 +536,8 @@ def panel(
 
     _validate_source_args(source, current_only=current_only, data_files=data_files)
 
-    start_year, start_period, start_dt = _parse_month(start)
-    end_year, end_period, end_dt = _parse_month(end)
+    _, _, start_dt = _parse_month(start)
+    _, _, end_dt = _parse_month(end)
     months = _month_sequence(start_dt, end_dt)
 
     dataset, cache = _load_analysis_dataset(
@@ -587,6 +587,124 @@ def panel(
             "Export path must end with .csv or .parquet", param_hint="--export"
         )
     click.echo(f"Panel written to {export}")
+
+
+@cli.command("metrics-timeseries")
+@click.option(
+    "--start",
+    required=True,
+    help="Start of the analysis window (YYYY-MM).",
+)
+@click.option(
+    "--end",
+    required=True,
+    help="End of the analysis window (YYYY-MM).",
+)
+@click.option(
+    "--export",
+    type=click.Path(dir_okay=False, path_type=Path),
+    required=True,
+    help="Destination file (.csv or .parquet) for the metrics time series.",
+)
+@click.option(
+    "--source",
+    type=click.Choice(["flatfiles", "database"], case_sensitive=False),
+    default="flatfiles",
+    show_default=True,
+    help="Where to source CPI observations.",
+)
+@click.option(
+    "--data-file",
+    "data_files",
+    multiple=True,
+    help=DATA_FILE_HELP,
+)
+@click.option(
+    "--current-only",
+    is_flag=True,
+    default=False,
+    help="Limit flatfile ingestion to the current partition.",
+)
+@click.option(
+    "--selectable-only/--include-unselectable",
+    default=True,
+    show_default=True,
+    help="Filter to selectable CPI items only.",
+)
+@click.pass_context
+def metrics_timeseries(
+    ctx: click.Context,
+    *,
+    start: str,
+    end: str,
+    export: Path,
+    source: str,
+    data_files: tuple[str, ...],
+    current_only: bool,
+    selectable_only: bool,
+) -> None:
+    """Aggregate KDE metrics into a tidy time series across months."""
+    _validate_source_args(source, current_only=current_only, data_files=data_files)
+
+    _, _, start_dt = _parse_month(start)
+    _, _, end_dt = _parse_month(end)
+    months = _month_sequence(start_dt, end_dt)
+    logger.info(
+        "timeseries.window",
+        start=start,
+        end=end,
+        months=len(months),
+        selectable_only=selectable_only,
+        source=source,
+    )
+
+    dataset, cache = _load_analysis_dataset(
+        ctx,
+        source=source,
+        current_only=current_only,
+        data_files=data_files,
+    )
+
+    rows: list[dict[str, object]] = []
+    for year, period_code, dt in months:
+        components, cache = _compute_growth_components(
+            dataset,
+            selectable_only=selectable_only,
+            target_period=(year, period_code),
+            cache=cache,
+        )
+        if not components:
+            logger.debug("timeseries.no_components", year=year, period=period_code)
+            continue
+        stats = compute_statistics(
+            [comp.value for comp in components],
+            [1.0] * len(components),
+        )
+        rows.append(
+            _flatten_timeseries_row(
+                date=dt.strftime("%Y-%m"),
+                year=year,
+                period=period_code,
+                stats=stats,
+                component_count=len(components),
+                selectable_only=selectable_only,
+                source=source.lower(),
+            )
+        )
+
+    if not rows:
+        raise click.ClickException("No rows were produced for the requested range.")
+
+    export.parent.mkdir(parents=True, exist_ok=True)
+    if export.suffix.lower() == ".csv":
+        _write_csv(rows, export)
+    elif export.suffix.lower() in {".parquet", ".pq"}:
+        _write_parquet(rows, export)
+    else:
+        raise click.BadParameter(
+            "Export path must end with .csv or .parquet", param_hint="--export"
+        )
+    click.echo(f"Metrics time series written to {export}")
 
 
 @cli.command("load-full")
@@ -1064,6 +1182,29 @@ def _flatten_summary_row(
         "skewness": stats.get("weighted_skewness"),
         "kurtosis": stats.get("weighted_kurtosis"),
         "effective_sample_size": stats.get("effective_sample_size"),
+    }
+
+
+def _flatten_timeseries_row(
+    *,
+    date: str,
+    year: int,
+    period: str,
+    stats: StatSummary,
+    component_count: int,
+    selectable_only: bool,
+    source: str,
+) -> dict[str, object]:
+    """Flatten time-series statistics into a single row."""
+    payload = _stats_to_dict(stats)
+    return {
+        "date": date,
+        "year": year,
+        "period": period,
+        "selectable_only": selectable_only,
+        "source": source,
+        "component_count": component_count,
+        **payload,
     }
 
 
