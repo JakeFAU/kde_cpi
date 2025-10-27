@@ -104,12 +104,10 @@ mypy_path = ["src"]
 exclude = "^tests/"
 
 [[tool.mypy.overrides]]
-module = ["asyncpg", "asyncpg.*"]
+module = ["asyncpg", "asyncpg.*", "tests.*"]
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["tests.*"]
 ignore_errors = true
+
 
 [tool.coverage.run]
 source = ["kde_cpi", "cli"]
