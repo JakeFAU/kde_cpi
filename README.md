@@ -78,6 +78,12 @@ Key commands:
 | `kde-cpi panel --start YYYY-MM --end YYYY-MM --export out/panel.parquet` | Build a tidy panel of metrics across many months (CSV or Parquet). |
 | `kde-cpi metrics-timeseries --start YYYY-MM --end YYYY-MM --export out/metrics.csv` | Export a single time series of KDE metrics to study stability over time. |
 
+The analytics commands (`analyze`, `compute`, `panel`, and `metrics-timeseries`) also share a few cross-cutting options:
+
+- `--series-lock KEY=VALUE` (repeatable) restricts processing to series whose metadata matches the requested components (e.g., `area_code=0000`, `seasonal=U`, `base_code=SA0`).
+- `--min-sample-size N` prints a warning whenever a group/period falls below the threshold (set `0` to disable).
+- `--skip-small-samples` drops those undersized groups entirely after warning, keeping the default behavior intact when omitted.
+
 Examples:
 
 ```bash
@@ -98,6 +104,9 @@ kde-cpi analyze --source flatfiles --group-by item-code-length --output-dir out/
 
 # JSON summary for a specific month
 kde-cpi compute --date 2024-12 --group-by item-code-length --output out/summary_2024-12.json
+
+# Lock to Minneapolis area series, require at least 30 components, and drop undersized groups
+kde-cpi compute --series-lock area_code=24 --series-lock seasonal=U --min-sample-size 30 --skip-small-samples
 
 # Panel export between two dates (writes Parquet)
 kde-cpi panel --start 2023-01 --end 2024-12 --group-by display-level --export out/kde_panel.parquet
@@ -133,6 +142,8 @@ Error and warning events include stack traces, while debug logs trace HTTP fetch
 Use `--group-by display-level` (default) to bucket by CPI item display levels, or `--group-by item-code-length` to bucket by the length of CPI item codes (4-char vs 6-char, etc.). The legacy `series-name-length` synonym still works but will be removed later. Set `--include-unselectable` if you want to include non-published CPI components.
 
 `kde-cpi compute` shares the same grouping and source flags but skips plotting, returning a JSON payload with full statistics plus representative components. `kde-cpi panel` iterates month-by-month, flattening the summaries into a tidy table (CSV or Parquet) so you can downstream filter, chart, or feed dashboards. When you just need one consolidated view of how the core KDE metrics evolve through time, `kde-cpi metrics-timeseries` emits a pandas-friendly CSV/Parquet with one row per month covering the mode, mean, median, trimmed mean, dispersion, and higher moments.
+
+Use the `--series-lock` flag (repeatable) to rebuild the candidate set using structural components of the CPI series ID (area, seasonal adjustment flag, base code, etc.). Combining locks with `--min-sample-size` helps highlight when the distribution becomes unreliable; add `--skip-small-samples` when you prefer to drop charts/rows instead of computing KDEs from very small samples.
 
 ## Development
 

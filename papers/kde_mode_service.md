@@ -143,6 +143,8 @@ kde-cpi stats --schema cpi_app --group-by area_code --output out/area_stats.json
 kde-cpi plots generate --schema cpi_app --output-dir out/plots
 ```
 
+All analysis commands can now be scoped to specific slices of CPI series metadata by repeating `--series-lock KEY=VALUE` (e.g., `area_code=0000`, `seasonal=U`, `base_code=SA0`). Pair those locks with `--min-sample-size 30 --skip-small-samples` to surface a warning (or drop the output) when the candidate set gets too thin for reliable KDE estimation.
+
 ---
 
 ## 8. Mathematical Intuition & Broader Context

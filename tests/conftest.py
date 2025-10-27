@@ -67,6 +67,11 @@ class FakeItem:
 class FakeSeries:
     item_code: str
     series_title: str
+    area_code: str = "0000"
+    seasonal: str = "U"
+    base_code: str = "SA0"
+    base_period: str = "1982-84=100"
+    periodicity_code: str = "M"
 
 
 @dataclass

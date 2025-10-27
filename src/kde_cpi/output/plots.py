@@ -145,7 +145,7 @@ def generate_density_plot(
 
     fig, ax = plt.subplots(figsize=(11, 6))
     ax.plot(
-        grid * 100,
+        grid,
         densities,
         color=config.color,
         linewidth=config.line_width,
@@ -156,11 +156,11 @@ def generate_density_plot(
     ax.set_xlabel(config.xlabel)
     ax.set_ylabel(config.ylabel)
     xmin, xmax = _axis_limits(vals)
-    ax.set_xlim(xmin * 100, xmax * 100)
+    ax.set_xlim(xmin, xmax)
 
     # Rug plot
     ax.scatter(
-        vals * 100,
+        vals,
         np.zeros_like(vals),
         marker="|",
         color=config.color,
@@ -177,17 +177,17 @@ def generate_density_plot(
             "median": {"color": config.color, "linestyle": "-.", "linewidth": 1.5},
         }
     ax.axvline(
-        stats.weighted_kde_mode * 100,
+        stats.weighted_kde_mode,
         label=f"Mode ≈ {stats.weighted_kde_mode * 100:.2f}%",
         **stat_styles["mode"],
     )
     ax.axvline(
-        stats.weighted_mean * 100,
+        stats.weighted_mean,
         label=f"Mean ≈ {stats.weighted_mean * 100:.2f}%",
         **stat_styles["mean"],
     )
     ax.axvline(
-        stats.weighted_median * 100,
+        stats.weighted_median,
         label=f"Median ≈ {stats.weighted_median * 100:.2f}%",
         **stat_styles["median"],
     )
@@ -221,7 +221,7 @@ def generate_histogram_plot(
 
     fig, ax = plt.subplots(figsize=(11, 6))
     ax.hist(
-        vals * 100,
+        vals,
         weights=wts,
         bins=config.bins,
         color=config.color,
@@ -233,17 +233,17 @@ def generate_histogram_plot(
     ax.set_xlabel(config.xlabel)
     ax.set_ylabel(config.ylabel)
     xmin, xmax = _axis_limits(vals)
-    ax.set_xlim(xmin * 100, xmax * 100)
+    ax.set_xlim(xmin, xmax)
 
     ax.axvline(
-        stats.weighted_mean * 100,
+        stats.weighted_mean,
         color="#333333",
         linestyle="--",
         linewidth=1.5,
         label="Weighted mean",
     )
     ax.axvline(
-        stats.weighted_kde_mode * 100,
+        stats.weighted_kde_mode,
         color="#d08300",
         linestyle=":",
         linewidth=1.5,

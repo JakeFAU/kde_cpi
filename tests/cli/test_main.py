@@ -1,7 +1,9 @@
 # tests/test_cli_fast.py
 import json
+from decimal import Decimal
 
 from click.testing import CliRunner
+from tests.conftest import FakeItem, FakeObs, FakeSeries
 
 import cli.main as cli_mod
 
@@ -127,3 +129,97 @@ def test_ensure_schema_noop(monkeypatch):
     monkeypatch.setattr(cli_mod, "CpiDatabaseLoader", FakeLoader)
     r = CliRunner().invoke(cli_mod.cli, ["ensure-schema", "--dsn", "postgresql://u:p@h/db"])
     assert r.exit_code == 0
+
+
+def _build_multi_series_dataset():
+    dataset = type("Dataset", (), {})()
+    dataset.series = {
+        "S1": FakeSeries(
+            item_code="AA",
+            series_title="Alpha",
+            area_code="1111",
+            seasonal="U",
+            base_code="BA0",
+        ),
+        "S2": FakeSeries(
+            item_code="BB",
+            series_title="Beta",
+            area_code="2222",
+            seasonal="S",
+            base_code="BA0",
+        ),
+    }
+    dataset.items = {
+        "AA": FakeItem(name="Alpha item", display_level=1),
+        "BB": FakeItem(name="Beta item", display_level=2),
+    }
+    dataset.observations = [
+        FakeObs("S1", 2024, "M09", Decimal("100.0")),
+        FakeObs("S1", 2025, "M09", Decimal("105.0")),
+        FakeObs("S2", 2024, "M09", Decimal("200.0")),
+        FakeObs("S2", 2025, "M09", Decimal("210.0")),
+    ]
+    dataset.areas = {}
+    return dataset
+
+
+def _json_from_output(output: str) -> dict:
+    start = output.find("{")
+    assert start != -1, f"Expected JSON document in output, got: {output!r}"
+    return json.loads(output[start:])
+
+
+def test_compute_series_lock_filters(monkeypatch):
+    def _load_dataset(*args, **kwargs):
+        ds = _build_multi_series_dataset()
+        return ds, cli_mod._build_observation_cache(ds)
+
+    monkeypatch.setattr(cli_mod, "_load_analysis_dataset", _load_dataset)
+    result = CliRunner().invoke(
+        cli_mod.cli,
+        [
+            "compute",
+            "--source",
+            "flatfiles",
+            "--current-only",
+            "--series-lock",
+            "area_code=1111",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = _json_from_output(result.output)
+    assert payload["component_count"] == 1
+    assert payload["series_locks"] == {"area_code": "1111"}
+    assert payload["groups"], "Expected at least one group in the filtered dataset."
+    for group in payload["groups"]:
+        assert group["count"] == 1
+        for example in group["examples"]:
+            assert example["series_id"] == "S1"
+
+
+def test_compute_skip_small_samples(monkeypatch):
+    def _load_dataset(*args, **kwargs):
+        ds = _build_multi_series_dataset()
+        return ds, cli_mod._build_observation_cache(ds)
+
+    monkeypatch.setattr(cli_mod, "_load_analysis_dataset", _load_dataset)
+    result = CliRunner().invoke(
+        cli_mod.cli,
+        [
+            "compute",
+            "--source",
+            "flatfiles",
+            "--current-only",
+            "--series-lock",
+            "area_code=1111",
+            "--min-sample-size",
+            "5",
+            "--skip-small-samples",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = _json_from_output(result.output)
+    assert payload["component_count"] == 1
+    assert payload["group_count"] == 0
+    assert payload["skip_small_samples"] is True
+    assert "Warning: Sample size 1 below minimum 5" in result.output
