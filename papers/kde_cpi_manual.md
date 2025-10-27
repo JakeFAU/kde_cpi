@@ -115,6 +115,16 @@ kde-cpi ensure-schema --dsn postgresql://user:pass@host/db
 
 Ensures CPI tables exist before ingestion.
 
+### Series Locks & Small-Sample Controls
+
+Analytics-oriented commands (`analyze`, `compute`, `panel`, `metrics-timeseries`) support optional guards to target specific slices of CPI series and manage sample reliability:
+
+* `--series-lock KEY=VALUE` (repeatable) rebuilds the candidate set using metadata components such as `area_code`, `seasonal`, `base_code`, or `item_code`.
+* `--min-sample-size N` emits a warning whenever a group or period drops below `N` observations (use `0` to disable).
+* `--skip-small-samples` tells the CLI to drop those undersized groups entirely after warning, leaving the default behavior unchanged when omitted.
+
+These controls make it easy to contrast seasonally adjusted vs. not seasonally adjusted series, isolate particular geographies, or ensure KDE outputs only appear when statistical coverage is adequate.
+
 ---
 
 ## 5. Data Model Summary

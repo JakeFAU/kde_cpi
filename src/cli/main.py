@@ -209,6 +209,51 @@ def fetch_dataset(
 
 GROUP_BY_CHOICES = ("display-level", "item-code-length", "series-name-length")
 
+SERIES_LOCK_ALIASES: dict[str, str] = {
+    "area": "area_code",
+    "area_code": "area_code",
+    "item": "item_code",
+    "item_code": "item_code",
+    "seasonal": "seasonal",
+    "seasonality": "seasonal",
+    "base": "base_code",
+    "base_code": "base_code",
+    "base_period": "base_period",
+    "periodicity": "periodicity_code",
+    "periodicity_code": "periodicity_code",
+}
+
+
+def _parse_series_locks(values: Sequence[str]) -> dict[str, str]:
+    """Convert CLI-provided lock expressions into canonical metadata filters."""
+    locks: dict[str, str] = {}
+    for raw in values:
+        token = raw.strip()
+        if not token:
+            continue
+        if "=" not in token:
+            raise click.BadParameter(
+                "Expected KEY=VALUE format for --series-lock.", param_hint="--series-lock"
+            )
+        key, value = (part.strip() for part in token.split("=", 1))
+        if not key or not value:
+            raise click.BadParameter(
+                "Series locks require both a key and a value.", param_hint="--series-lock"
+            )
+        canonical = SERIES_LOCK_ALIASES.get(key.lower())
+        if canonical is None:
+            valid_keys = ", ".join(sorted(set(SERIES_LOCK_ALIASES.values())))
+            raise click.BadParameter(
+                f"Unsupported series metadata key: {key!r}. Choose from: {valid_keys}.",
+                param_hint="--series-lock",
+            )
+        if canonical in locks:
+            raise click.BadParameter(
+                f"Duplicate lock for {canonical!r} detected.", param_hint="--series-lock"
+            )
+        locks[canonical] = value
+    return locks
+
 
 @cli.command("analyze")
 @click.option(
@@ -257,6 +302,25 @@ GROUP_BY_CHOICES = ("display-level", "item-code-length", "series-name-length")
     show_default=True,
     help="Restrict the analysis set to items flagged as selectable in CPI metadata.",
 )
+@click.option(
+    "--series-lock",
+    "series_lock_args",
+    multiple=True,
+    help="Constrain series metadata with KEY=VALUE locks (e.g. area_code=0000).",
+)
+@click.option(
+    "--min-sample-size",
+    type=int,
+    default=0,
+    show_default=True,
+    help="Warn when a group sample falls below this size. Set to 0 to disable.",
+)
+@click.option(
+    "--skip-small-samples/--include-small-samples",
+    default=False,
+    show_default=True,
+    help="Skip KDE artifacts when the group is smaller than the minimum sample size.",
+)
 @click.pass_context
 def analyze(
     ctx: click.Context,
@@ -268,12 +332,16 @@ def analyze(
     data_files: tuple[str, ...],
     current_only: bool,
     selectable_only: bool,
+    series_lock_args: tuple[str, ...],
+    min_sample_size: int,
+    skip_small_samples: bool,
 ) -> None:
     """Compute YoY growth distributions and emit charts/statistics."""
     original_group = group_by.lower()
     legacy_series_grouping = original_group == "series-name-length"
     group_by_normalized = original_group
     source = source.lower()
+    series_locks = _parse_series_locks(series_lock_args)
 
     if legacy_series_grouping:
         logger.warning(
@@ -294,6 +362,9 @@ def analyze(
         current_only=current_only,
         selectable_only=selectable_only,
         length_bin_size=length_bin_size,
+        series_locks=series_locks,
+        min_sample_size=min_sample_size,
+        skip_small_samples=skip_small_samples,
     )
 
     if source == "database":
@@ -306,6 +377,7 @@ def analyze(
         dataset,
         selectable_only=selectable_only,
         target_period=None,
+        series_locks=series_locks,
     )
     if not components:
         raise click.ClickException("No year-over-year components were available for analysis.")
@@ -315,6 +387,14 @@ def analyze(
     group_summaries = []
     for label, comps in groups.items():
         if not comps:
+            continue
+        if _should_skip_sample(
+            len(comps),
+            min_sample_size=min_sample_size,
+            skip_small_samples=skip_small_samples,
+            scope="group",
+            label=str(label),
+        ):
             continue
         group_summaries.append(_render_group_reports(analysis_dir, label, comps))
 
@@ -326,6 +406,9 @@ def analyze(
         "group_count": len(group_summaries),
         "output_dir": str(analysis_dir),
         "groups": group_summaries,
+        "series_locks": series_locks,
+        "min_sample_size": min_sample_size,
+        "skip_small_samples": skip_small_samples,
     }
     summary_path = analysis_dir / "summary.json"
     summary_path.write_text(json.dumps(summary_payload, indent=2))
@@ -382,6 +465,25 @@ def analyze(
     show_default=True,
     help="Filter to selectable CPI items only.",
 )
+@click.option(
+    "--series-lock",
+    "series_lock_args",
+    multiple=True,
+    help="Constrain series metadata with KEY=VALUE locks (e.g. seasonal=U).",
+)
+@click.option(
+    "--min-sample-size",
+    type=int,
+    default=0,
+    show_default=True,
+    help="Warn when a group sample falls below this size. Set to 0 to disable.",
+)
+@click.option(
+    "--skip-small-samples/--include-small-samples",
+    default=False,
+    show_default=True,
+    help="Skip reporting groups that do not meet the minimum sample size.",
+)
 @click.pass_context
 def compute(
     ctx: click.Context,
@@ -394,9 +496,13 @@ def compute(
     data_files: tuple[str, ...],
     current_only: bool,
     selectable_only: bool,
+    series_lock_args: tuple[str, ...],
+    min_sample_size: int,
+    skip_small_samples: bool,
 ) -> None:
     """Compute KDE-mode inflation summary without generating plots."""
     group_by_normalized = group_by.lower()
+    series_locks = _parse_series_locks(series_lock_args)
     legacy_series_grouping = group_by_normalized == "series-name-length"
     if legacy_series_grouping:
         logger.warning(
@@ -434,12 +540,25 @@ def compute(
         selectable_only=selectable_only,
         target_period=target_period,
         cache=cache,
+        series_locks=series_locks,
     )
     if not components:
         raise click.ClickException("No components were available for the requested configuration.")
 
     groups = _group_components(components, group_by_normalized, length_bin_size=length_bin_size)
-    summaries = [_build_group_summary(label, comps) for label, comps in groups.items() if comps]
+    summaries: list[dict[str, object]] = []
+    for label, comps in groups.items():
+        if not comps:
+            continue
+        if _should_skip_sample(
+            len(comps),
+            min_sample_size=min_sample_size,
+            skip_small_samples=skip_small_samples,
+            scope="group",
+            label=str(label),
+        ):
+            continue
+        summaries.append(_build_group_summary(label, comps))
     payload = {
         "generated_at": datetime.now(UTC).isoformat(),
         "date": date_label,
@@ -449,6 +568,9 @@ def compute(
         "component_count": len(components),
         "group_count": len(summaries),
         "groups": summaries,
+        "series_locks": series_locks,
+        "min_sample_size": min_sample_size,
+        "skip_small_samples": skip_small_samples,
     }
     document = json.dumps(payload, indent=2)
     if output:
@@ -507,6 +629,25 @@ def compute(
     show_default=True,
     help="Filter to selectable CPI items only.",
 )
+@click.option(
+    "--series-lock",
+    "series_lock_args",
+    multiple=True,
+    help="Constrain series metadata with KEY=VALUE locks (e.g. area_code=0000).",
+)
+@click.option(
+    "--min-sample-size",
+    type=int,
+    default=0,
+    show_default=True,
+    help="Warn when a group sample falls below this size. Set to 0 to disable.",
+)
+@click.option(
+    "--skip-small-samples/--include-small-samples",
+    default=False,
+    show_default=True,
+    help="Skip rows whose group samples do not meet the minimum.",
+)
 @click.pass_context
 def panel(
     ctx: click.Context,
@@ -520,9 +661,13 @@ def panel(
     data_files: tuple[str, ...],
     current_only: bool,
     selectable_only: bool,
+    series_lock_args: tuple[str, ...],
+    min_sample_size: int,
+    skip_small_samples: bool,
 ) -> None:
     """Generate a tidy panel of KDE-mode metrics over a date range."""
     group_by_normalized = group_by.lower()
+    series_locks = _parse_series_locks(series_lock_args)
     legacy_series_grouping = group_by_normalized == "series-name-length"
     if legacy_series_grouping:
         logger.warning(
@@ -549,18 +694,35 @@ def panel(
 
     rows: list[dict[str, object]] = []
     for year, period_code, dt in months:
+        date_label = dt.strftime("%Y-%m")
         components, cache = _compute_growth_components(
             dataset,
             selectable_only=selectable_only,
             target_period=(year, period_code),
             cache=cache,
+            series_locks=series_locks,
         )
         if not components:
             continue
+        if _should_skip_sample(
+            len(components),
+            min_sample_size=min_sample_size,
+            skip_small_samples=skip_small_samples,
+            scope="period",
+            label=date_label,
+        ):
+            continue
         groups = _group_components(components, group_by_normalized, length_bin_size=length_bin_size)
-        date_label = dt.strftime("%Y-%m")
         for label, comps in groups.items():
             if not comps:
+                continue
+            if _should_skip_sample(
+                len(comps),
+                min_sample_size=min_sample_size,
+                skip_small_samples=skip_small_samples,
+                scope="group",
+                label=f"{date_label}:{label}",
+            ):
                 continue
             summary = _build_group_summary(label, comps)
             rows.append(
@@ -631,6 +793,25 @@ def panel(
     show_default=True,
     help="Filter to selectable CPI items only.",
 )
+@click.option(
+    "--series-lock",
+    "series_lock_args",
+    multiple=True,
+    help="Constrain series metadata with KEY=VALUE locks (e.g. base_code=SA0).",
+)
+@click.option(
+    "--min-sample-size",
+    type=int,
+    default=0,
+    show_default=True,
+    help="Warn when the sample falls below this size. Set to 0 to disable.",
+)
+@click.option(
+    "--skip-small-samples/--include-small-samples",
+    default=False,
+    show_default=True,
+    help="Skip periods that do not meet the minimum sample size.",
+)
 @click.pass_context
 def metrics_timeseries(
     ctx: click.Context,
@@ -642,6 +823,9 @@ def metrics_timeseries(
     data_files: tuple[str, ...],
     current_only: bool,
     selectable_only: bool,
+    series_lock_args: tuple[str, ...],
+    min_sample_size: int,
+    skip_small_samples: bool,
 ) -> None:
     """Aggregate KDE metrics into a tidy time series across months."""
     _validate_source_args(source, current_only=current_only, data_files=data_files)
@@ -649,6 +833,7 @@ def metrics_timeseries(
     _, _, start_dt = _parse_month(start)
     _, _, end_dt = _parse_month(end)
     months = _month_sequence(start_dt, end_dt)
+    series_locks = _parse_series_locks(series_lock_args)
     logger.info(
         "timeseries.window",
         start=start,
@@ -656,6 +841,9 @@ def metrics_timeseries(
         months=len(months),
         selectable_only=selectable_only,
         source=source,
+        series_locks=series_locks,
+        min_sample_size=min_sample_size,
+        skip_small_samples=skip_small_samples,
     )
 
     dataset, cache = _load_analysis_dataset(
@@ -672,9 +860,19 @@ def metrics_timeseries(
             selectable_only=selectable_only,
             target_period=(year, period_code),
             cache=cache,
+            series_locks=series_locks,
         )
         if not components:
             logger.debug("timeseries.no_components", year=year, period=period_code)
+            continue
+        date_label = dt.strftime("%Y-%m")
+        if _should_skip_sample(
+            len(components),
+            min_sample_size=min_sample_size,
+            skip_small_samples=skip_small_samples,
+            scope="period",
+            label=date_label,
+        ):
             continue
         stats = compute_statistics(
             [comp.value for comp in components],
@@ -682,7 +880,7 @@ def metrics_timeseries(
         )
         rows.append(
             _flatten_timeseries_row(
-                date=dt.strftime("%Y-%m"),
+                date=date_label,
                 year=year,
                 period=period_code,
                 stats=stats,
@@ -931,12 +1129,32 @@ def _load_dataset_from_database(dsn: str, schema: str) -> Dataset:
     return dataset
 
 
+def _series_matches(series: object, locks: Mapping[str, str] | None) -> bool:
+    """Return True when a series satisfies all requested metadata locks."""
+    if not locks:
+        return True
+    if series is None:
+        return False
+    for key, expected in locks.items():
+        actual = getattr(series, key, None)
+        if actual is None:
+            return False
+        if isinstance(actual, str):
+            if actual.strip().upper() != expected.strip().upper():
+                return False
+        else:
+            if str(actual) != expected:
+                return False
+    return True
+
+
 def _compute_growth_components(
     dataset: Dataset,
     *,
     selectable_only: bool,
     target_period: tuple[int, str] | None = None,
     cache: ObservationCache | None = None,
+    series_locks: Mapping[str, str] | None = None,
 ) -> tuple[list[GrowthComponent], ObservationCache]:
     """Derive YoY growth components per series from the dataset."""
     cache = cache or _build_observation_cache(dataset)
@@ -946,6 +1164,9 @@ def _compute_growth_components(
         normalized_target = (target_period[0], _normalize_period(target_period[1]))
 
     for series_id, series_obs in cache.observations.items():
+        series = dataset.series.get(series_id)
+        if not _series_matches(series, series_locks):
+            continue
         if normalized_target is not None:
             current_key = normalized_target
         else:
@@ -963,7 +1184,6 @@ def _compute_growth_components(
         value = _compute_yoy(current, previous)
         if value is None:
             continue
-        series = dataset.series.get(series_id)
         if series is None:
             continue
         item = dataset.items.get(series.item_code)
@@ -1028,6 +1248,30 @@ def _group_components(
         return (0, label)
 
     return dict(sorted(groups.items(), key=sort_key))
+
+
+def _should_skip_sample(
+    sample_size: int,
+    *,
+    min_sample_size: int,
+    skip_small_samples: bool,
+    scope: str,
+    label: str,
+) -> bool:
+    """Emit warnings for undersized samples and indicate whether processing should stop."""
+    if min_sample_size <= 0 or sample_size >= min_sample_size:
+        return False
+    msg = f"Sample size {sample_size} below minimum {min_sample_size} for {scope} '{label}'."
+    click.secho(f"Warning: {msg}", err=True)
+    logger.warning(
+        "analysis.small_sample",
+        scope=scope,
+        label=label,
+        sample_size=sample_size,
+        min_sample_size=min_sample_size,
+        skip=skip_small_samples,
+    )
+    return skip_small_samples
 
 
 def _render_group_reports(
