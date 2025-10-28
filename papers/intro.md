@@ -38,10 +38,10 @@ $$
 
 where:
 
-* (x_i) are observed year-over-year price changes,
-* (K) is the kernel (the bump shape),
-* (h) is the bandwidth (how wide each bump spreads), and
-* (n) is the number of data points.
+* $x_i$ are observed year-over-year price changes,
+* $K$ is the kernel (the bump shape),
+* $h$ is the bandwidth (how wide each bump spreads), and
+* $n$ is the number of data points.
 
 The **bandwidth** controls the trade-off: too small, and the distribution looks noisy; too large, and it looks bland. KDE balances that tension to reveal the real structure—fat tails, asymmetry, even multiple peaks.
 
