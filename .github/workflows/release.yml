@@ -42,12 +42,7 @@ jobs:
           set -euo pipefail
           # Extract tag without the leading 'v'
           TAG="${GITHUB_REF_NAME#v}"
-          # Read version from pyproject.toml using Python (requires Python >= 3.11 for tomllib)
-          PYTHON_VERSION=$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-          if (( $(echo "$PYTHON_VERSION" | tr -d '.') < 311 )); then
-            echo "::error::Python version $PYTHON_VERSION is too old; tomllib requires Python >= 3.11"
-            exit 1
-          fi
+          # Read version from pyproject.toml using Python's tomllib
           PYPROJECT_VERSION="$(python -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
           echo "Tag: $TAG"
           echo "pyproject version: $PYPROJECT_VERSION"
