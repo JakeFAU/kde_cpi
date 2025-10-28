@@ -1,0 +1,77 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Guard against self git+ssh dependency
+        run: |
+          set -e
+          shopt -s nullglob
+          if grep -Eiq 'git\+ssh.*github\.com/.*/kde_cpi' requirements*.txt 2>/dev/null; then
+            echo "::error::Remove git+ssh self dependency. Use -e .[dev,test] instead."
+            exit 1
+          fi
+
+      - name: Install project (editable) + dev/test extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,test]
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: MyPy (type check)
+        run: mypy src
+
+      - name: Pytest with coverage (targets your packages only)
+        env:
+          PYTHONWARNINGS: default
+          PYTHONHASHSEED: "0"
+        run: |
+          pytest -q --maxfail=1 --disable-warnings \
+            --cov=kde_cpi --cov=cli \
+            --cov-report=term --cov-report=xml \
+            --cov-fail-under=80
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
+
+      # Optional: upload to Codecov (uncomment if you use it)
+      # - uses: codecov/codecov-action@v5
+      #   with:
+      #     files: coverage.xml
+      #     flags: py${{ matrix.python-version }}
+      #     fail_ci_if_error: false

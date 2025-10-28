@@ -1,10 +1,11 @@
 """Unit tests for the logging configuration."""
+
 import logging
 
 import pytest
 import structlog
 
-from kde_cpi.logging import configure_logging, LOG_LEVELS
+from kde_cpi.logging import configure_logging
 
 
 def test_configure_logging(mocker):

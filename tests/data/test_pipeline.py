@@ -12,7 +12,9 @@ def mock_dataset_builder(mocker):
     dataset = Dataset()
     builder_instance = mocker.MagicMock()
     builder_instance.load_dataset.return_value = dataset
-    builder_class = mocker.patch("kde_cpi.data.pipeline.CpiDatasetBuilder", return_value=builder_instance)
+    builder_class = mocker.patch(
+        "kde_cpi.data.pipeline.CpiDatasetBuilder", return_value=builder_instance
+    )
     return builder_class, builder_instance, dataset
 
 
@@ -20,7 +22,9 @@ def mock_dataset_builder(mocker):
 def mock_database_loader(mocker):
     """Fixture for a mock CpiDatabaseLoader."""
     loader_instance = mocker.AsyncMock()
-    loader_class = mocker.patch("kde_cpi.data.pipeline.CpiDatabaseLoader", return_value=loader_instance)
+    loader_class = mocker.patch(
+        "kde_cpi.data.pipeline.CpiDatabaseLoader", return_value=loader_instance
+    )
     return loader_class, loader_instance
 
 
@@ -42,7 +46,9 @@ async def test_load_full_history_orchestrates_load(mock_dataset_builder, mock_da
 
 
 @pytest.mark.asyncio
-async def test_load_full_history_with_data_files_and_no_truncate(mock_dataset_builder, mock_database_loader):
+async def test_load_full_history_with_data_files_and_no_truncate(
+    mock_dataset_builder, mock_database_loader
+):
     """Test that load_full_history handles data_files and truncate=False."""
     _, builder_instance, dataset = mock_dataset_builder
     _, loader_instance = mock_database_loader
@@ -55,7 +61,9 @@ async def test_load_full_history_with_data_files_and_no_truncate(mock_dataset_bu
 
 
 @pytest.mark.asyncio
-async def test_update_current_periods_orchestrates_update(mock_dataset_builder, mock_database_loader):
+async def test_update_current_periods_orchestrates_update(
+    mock_dataset_builder, mock_database_loader
+):
     """Test that update_current_periods correctly orchestrates an update."""
     builder_class, builder_instance, dataset = mock_dataset_builder
     loader_class, loader_instance = mock_database_loader

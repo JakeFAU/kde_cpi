@@ -1,9 +1,7 @@
 """Unit tests for the plotting tools."""
-from pathlib import Path
 
 import numpy as np
 import pytest
-from matplotlib import pyplot as plt
 
 from kde_cpi.output.plots import (
     DensityPlotConfig,

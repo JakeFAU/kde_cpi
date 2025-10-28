@@ -1,4 +1,5 @@
 """Unit tests for the math utilities."""
+
 import numpy as np
 import pytest
 
