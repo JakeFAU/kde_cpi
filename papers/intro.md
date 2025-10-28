@@ -23,15 +23,56 @@ Here are the classics, and why they all miss the mark:
 
 ---
 
-## KDE Mode
+## KDE Mode — Letting the Data Speak
 
-So here’s the alternative: stop pretending we know the shape of inflation. Let the data tell us.
+Imagine standing in a dark field with a flashlight, shining it once for every price change in the economy. Where your beams overlap, the light brightens—those are the price movements that happen most often. That luminous landscape is what a **Kernel Density Estimate (KDE)** builds: a smooth probability surface from the scattered points of real data.
 
-A **Kernel Density Estimate (KDE)** is a nonparametric way of estimating a probability distribution. Instead of assuming a bell curve, it builds a landscape—placing a small “bump” of probability around each data point, then summing them all. The result is a smooth estimate of how prices actually move, revealing asymmetries, fat tails, and multiple peaks that traditional models hide.
+### Step 1: The Core Idea
 
-Where the mean and median reduce an economy to a single number, KDE lets us see the terrain—the ridges and valleys of price change across categories. The **mode** of that landscape—the point of maximum density—captures the most common rate of inflation in the economy at that moment. It’s robust to outliers, immune to the arbitrary weightings that dominate CPI, and less prone to distortion by rent-heavy categories. It tells you what *most prices* are doing, not just what the biggest or noisiest ones are.
+Traditional inflation measures like the mean or median collapse all prices into one number. KDE does something radical for economics—it refuses to simplify too early. Instead of assuming a shape (bell curve, log-normal, whatever), it estimates the shape *from the data itself*. Each data point adds a “bump” of probability, described by a **kernel function**—often a Gaussian curve centered on that observation. Summing those bumps yields a continuous estimate of the underlying distribution.
 
-Rather than trimming or excluding, we listen. The KDE mode finds the “consensus” inflation rate implied by the data itself—not by the assumptions of 1970s econometricians.
+Formally:
+$$
+\hat{f}(x) \;=\; \frac{1}{n\,h}\,\sum_{i=1}^{n} K\!\left(\frac{x - x_i}{h}\right)
+$$
+
+where:
+
+* (x_i) are observed year-over-year price changes,
+* (K) is the kernel (the bump shape),
+* (h) is the bandwidth (how wide each bump spreads), and
+* (n) is the number of data points.
+
+The **bandwidth** controls the trade-off: too small, and the distribution looks noisy; too large, and it looks bland. KDE balances that tension to reveal the real structure—fat tails, asymmetry, even multiple peaks.
+
+### Step 2: Finding the Mode
+
+Once you have the KDE curve, the **mode**—the highest point—marks the most common inflation rate across all goods and services. That’s not an average. It’s the *consensus reality* of the economy at that moment, the inflation rate most consumers actually experience.
+
+In the `kde_cpi` implementation, this is computed directly from the smoothed distribution of year-over-year price changes, grouped by display level or other series dimensions drawn from your normalized CPI database.
+
+Mathematically:
+$$
+\text{KDE Mode} \;=\; \underset{x}{\arg\max}\;\hat{f}(x)
+$$
+
+### Step 3: Why It Works Better
+
+1. **Nonparametric honesty:** No assumptions about normality or symmetry—unlike trimmed means or medians that pretend the distribution’s simple.
+2. **Robustness:** Outliers don’t dominate because each observation contributes locally. The shape emerges organically.
+3. **Granularity:** Because it runs directly on the full CPI microstructure (every item-area-series combination stored in your schema), it respects the heterogeneity of the economy rather than smoothing it away.
+4. **Interpretability:** The mode tells us what *most prices* are doing, not just the average of all spending weights.
+
+### Step 4: Comparison — Why KDE Mode Wins
+
+| Measure                | Core Method                | Sensitivity to Outliers | Handles Multimodality? | Intuitive Meaning                                   |
+| ---------------------- | -------------------------- | ----------------------- | ---------------------- | --------------------------------------------------- |
+| **Mean CPI**           | Weighted average           | Very high               | ❌                      | "Average" inflation (distorted by large categories) |
+| **Median CPI**         | 50th percentile            | Moderate                | ❌                      | "Middle" inflation, but blind to multiple peaks     |
+| **Trimmed Mean CPI**   | Drops tails                | Low                     | ❌                      | "Average" after arbitrary censorship                |
+| **KDE Mode Inflation** | Nonparametric density peak | Low                     | ✅                      | "Most common" inflation rate—data-driven consensus  |
+
+Where older measures silence data that doesn’t fit a preconception, KDE listens to the whole orchestra. It doesn’t tell policymakers what they *want* to see; it tells them what the data is *actually playing*. And in the era of pandemic supply shocks and rent distortions, that difference isn’t statistical—it’s philosophical.
 
 ---
 
@@ -44,7 +85,7 @@ It’s open source, available on [GitHub](https://github.com/JakeFAU/kde_cpi), a
 pip install kde_mode
 ```
 
-It runs from the command line or as an importable library. Documentation is [here](https://jakefau.github.io/kde_cpi/), but it’s designed to be intuitive—data in, distribution out.
+It runs from the command line or as an importable library. Documentation is [Docs](https://jakefau.github.io/kde_cpi/), but it’s designed to be intuitive—data in, distribution out.
 
 ---
 
@@ -54,6 +95,107 @@ This is the first gift `kde_mode` gives you: a full modernization of the BLS’s
 The BLS still distributes CPI data as dozens of flat files—a format better suited for a mainframe than modern analytics. `kde_mode` automates the entire ingestion process: downloading, decoding, and stitching every partition into a relational **PostgreSQL** database. The result is clean, normalized, and query-ready for any analytical or machine learning workflow.
 
 There’s even a `docker-compose.yml` that builds the database and launches **pgAdmin** for browsing. You can point it at your own DSN if you prefer. It’s a small quality-of-life revolution for anyone who’s ever parsed BLS flat files by hand.
+
+### The Database
+
+The loader builds a small, tidy star-ish schema around BLS CPI series and their observations. Here’s the lay of the land:
+
+```text
+          ┌────────────────┐        ┌─────────────────┐
+          │    cpi_area    │        │    cpi_item     │
+          │  area_code PK  │        │ item_code  PK   │
+          │  area_name     │        │ item_name       │
+          └──────┬─────────┘        │ display_level   │
+                 │                  │ selectable      │
+                 │                  │ sort_sequence   │
+                 │                  └─────────┬───────┘
+                 │                            │
+                 │        ┌───────────────────▼───────────────────┐
+                 └────────►                 cpi_series            │
+                          │ series_id  PK                          │
+                          │ area_code  → cpi_area.area_code        │
+                          │ item_code  → cpi_item.item_code        │
+                          │ seasonal (S/U)                          │
+                          │ periodicity_code (R, etc.)             │
+                          │ base_code, base_period                 │
+                          │ begin_year/period, end_year/period     │
+                          └───────────────┬────────────────────────┘
+                                          │
+                              ┌───────────▼───────────┐
+                              │     cpi_observation   │
+                              │ (series_id,year,period) PK
+                              │ value NUMERIC         │
+                              │ footnotes TEXT[]      │
+                              └───────────────────────┘
+
+         ┌───────────────┐                 ┌─────────────────┐
+         │  cpi_period   │                 │  cpi_footnote    │
+         │ period_codePK │                 │ footnote_code PK │
+         │ period_abbr   │                 │ footnote_text    │
+         │ period_name   │                 └──────────────────┘
+         └───────────────┘
+```
+
+Table definitions and indexes are straight from the loader’s DDL: cpi_area and cpi_item define reference metadata; cpi_series keys the BLS series with seasonal/periodicity/base fields; cpi_observation stores the time series (one row per month per series). Helpful indexes exist on display_level, item_code, and observation keys to keep queries snappy.
+
+#### Some Cool Queries
+
+1. **Latest available CPI month (global):**
+
+```sql
+WITH latest AS (
+  SELECT MAX((year::text || '-' || RIGHT(period, 2))) AS ym
+  FROM cpi_observation
+)
+SELECT
+  SUBSTRING(ym, 1, 4)::int  AS year,
+  ('M' || SUBSTRING(ym, 6, 2)) AS period
+FROM latest;
+```
+
+2. **Build a proper date for observations:**
+
+BLS stores months as M01…M12. This turns (year, period) into a DATE for plotting:
+
+```sql
+SELECT
+  series_id,
+  make_date(year, RIGHT(period, 2)::int, 1) AS month_date,
+  value
+FROM cpi_observation
+LIMIT 5;
+```
+
+3. **Pull a “national, monthly, unadjusted” slice (the good stuff):**
+
+```sql
+SELECT s.series_id, s.item_code, s.area_code, o.year, o.period, o.value
+FROM cpi_series s
+JOIN cpi_observation o USING (series_id)
+WHERE s.area_code = '0000'        -- U.S. city average
+  AND s.seasonal  = 'U'           -- unadjusted
+  AND s.periodicity_code = 'R';   -- monthly
+```
+
+4. **Find the top contributors to the right tail in a given month:**
+
+```sql
+WITH yoy AS (
+  SELECT
+    s.series_id, s.item_code, i.item_name, i.display_level,
+    make_date(o.year, RIGHT(o.period, 2)::int, 1) AS month_date,
+    (o.value / LAG(o.value, 12) OVER (PARTITION BY s.series_id ORDER BY o.year, o.period) - 1) AS yoy
+  FROM cpi_observation o
+  JOIN cpi_series s USING (series_id)
+  JOIN cpi_item   i ON i.item_code = s.item_code
+  WHERE s.area_code = '0000' AND s.seasonal = 'U' AND s.periodicity_code = 'R'
+)
+SELECT item_name, display_level, yoy
+FROM yoy
+WHERE month_date = DATE '2025-06-01'
+ORDER BY yoy DESC
+LIMIT 15;
+```
 
 ---
 
