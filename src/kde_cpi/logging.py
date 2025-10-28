@@ -43,8 +43,7 @@ def configure_logging(
         renderer = structlog.dev.ConsoleRenderer()
 
     structlog.configure(
-        processors=shared_processors + [renderer],
-        wrapper_class=structlog.make_filtering_bound_logger(level_value),
+        processors=[structlog.stdlib.filter_by_level] + shared_processors + [renderer],
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
