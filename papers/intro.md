@@ -85,7 +85,7 @@ It’s open source, available on [GitHub](https://github.com/JakeFAU/kde_cpi), a
 pip install kde_mode
 ```
 
-It runs from the command line or as an importable library. Documentation is [Docs](https://jakefau.github.io/kde_cpi/), but it’s designed to be intuitive—data in, distribution out.
+It runs from the command line or as an importable library. Documentation is [here](https://jakefau.github.io/kde_cpi/), but it’s designed to be intuitive—data in, distribution out.
 
 ---
 
