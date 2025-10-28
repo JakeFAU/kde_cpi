@@ -44,7 +44,7 @@ jobs:
           TAG="${GITHUB_REF_NAME#v}"
           # Read version from pyproject.toml using Python (requires Python >= 3.11 for tomllib)
           PYTHON_VERSION=$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-          if [[ "$(echo "$PYTHON_VERSION < 3.11" | bc)" -eq 1 ]]; then
+          if (( $(echo "$PYTHON_VERSION" | tr -d '.') < 311 )); then
             echo "::error::Python version $PYTHON_VERSION is too old; tomllib requires Python >= 3.11"
             exit 1
           fi
