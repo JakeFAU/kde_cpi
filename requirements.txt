@@ -45,7 +45,7 @@ identify==2.6.15
 idna==3.11
 imagesize==1.4.1
 iniconfig==2.3.0
-ipykernel==7.0.1
+ipykernel==7.1.0
 ipython==9.6.0
 ipython_pygments_lexers==1.1.1
 isoduration==20.11.0
