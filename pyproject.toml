@@ -118,4 +118,8 @@ omit = ["tests/*"]
 show_missing = true
 skip_covered = true
 omit = ["*/__main__.py"]
-exclude_lines = ["if __name__ == .__main__.:", "# pragma: no cover"]
+exclude_lines = ["if __name__ == '__main__':", "# pragma: no cover"]
+
+[tool.coverage.html]
+directory = "htmlcov"
+title = "KDE-CPI Coverage Report"
