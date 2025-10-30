@@ -25,7 +25,7 @@ dependencies = [
     "scipy>=1.16.2,<2",
     "seaborn>=0.13.2,<1",
     "tqdm>=4.67.1,<5",
-    "structlog>=24.4.0,<25",
+    "structlog>=24.4.0,<26",
 ]
 
 [project.scripts]
