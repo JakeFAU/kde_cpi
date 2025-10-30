@@ -40,7 +40,7 @@ classifiers = [
 ]
 
 [project.scripts]
-kde-cpi = "kde_cpi.cli:cli"
+kde-cpi = "cli.main:cli"
 
 [project.urls]
 Homepage = "https://github.com/JakeFAU/kde_cpi"
