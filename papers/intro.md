@@ -110,12 +110,12 @@ The loader builds a small, tidy star-ish schema around BLS CPI series and their 
                  │                  │ sort_sequence   │
                  │                  └─────────┬───────┘
                  │                            │
-                 │        ┌───────────────────▼───────────────────┐
-                 └────────►                 cpi_series            │
+                 │        ┌───────────────────▼────────────────────┐
+                 └────────►                 cpi_series             │
                           │ series_id  PK                          │
                           │ area_code  → cpi_area.area_code        │
                           │ item_code  → cpi_item.item_code        │
-                          │ seasonal (S/U)                          │
+                          │ seasonal (S/U)                         │
                           │ periodicity_code (R, etc.)             │
                           │ base_code, base_period                 │
                           │ begin_year/period, end_year/period     │

@@ -1,37 +1,55 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=80", "setuptools-scm[toml]>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "kde-cpi"
-version = "1.0.1"
+dynamic = ["version"]
 description = "Tools for ingesting BLS CPI flat files and loading them into PostgreSQL."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Jacob Bourne", email = "jacob.bourne@gmail.com" }]
 requires-python = ">=3.11"
+
 dependencies = [
-    "arrow>=1.4.0,<2",
-    "attrs>=25.4.0,<26",
-    "asyncpg>=0.30.0,<1",
-    "click>=8.3.0,<9",
-    "jupyterlab>=4.4.10,<5",
-    "marshmallow>=4.0.1,<5",
-    "matplotlib>=3.10.7,<4",
-    "numpy>=2.3.4,<3",
-    "pandas>=2.3.3,<3",
-    "requests>=2.32.5,<3",
-    "scikit-learn>=1.7.2,<2",
-    "scipy>=1.16.2,<2",
-    "seaborn>=0.13.2,<1",
-    "tqdm>=4.67.1,<5",
-    "structlog>=24.4.0,<26",
+    "arrow>=1.4,<2",
+    "attrs>=23,<26",
+    "asyncpg>=0.30,<1",
+    "click>=8.1,<9",
+    "marshmallow>=3.22,<5",
+    "matplotlib>=3.8,<4",
+    "numpy>=2.0,<3",
+    "pandas>=2.0,<3",
+    "requests>=2.31,<3",
+    "scikit-learn>=1.4,<2",
+    "scipy>=1.12,<2",
+    "seaborn>=0.13,<1",
+    "tqdm>=4.66,<5",
+    "structlog>=24,<26",
+]
+keywords = ["CPI", "inflation", "economics", "KDE", "BLS", "time-series"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Office/Business :: Financial :: Investment",
 ]
 
 [project.scripts]
 kde-cpi = "cli.main:cli"
 
+[project.urls]
+Homepage = "https://github.com/JakeFAU/kde_cpi"
+Repository = "https://github.com/JakeFAU/kde_cpi"
+Issues = "https://github.com/JakeFAU/kde_cpi/issues"
+Documentation = "https://github.com/JakeFAU/kde_cpi#readme"
+
 [project.optional-dependencies]
+doc = ["sphinx", "sphinx-autodoc-typehints", "furo", "sphinx-copybutton"]
 test = [
     "pytest",
     "pytest-cov",
@@ -42,16 +60,7 @@ test = [
     "pytest-timeout",
     "tox",
 ]
-dev = ["ruff", "mypy", "pre-commit", "types-requests", "bump2version"]
-doc = [
-    "sphinx",
-    "sphinx-autodoc-typehints",
-    "furo",
-    "sphinx-copybutton",
-    "sphinx-inline-tabs",
-    "myst-parser",
-    "sphinxcontrib-mermaid",
-]
+dev = ["ruff", "mypy", "pre-commit", "types-requests"]
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -59,12 +68,20 @@ package-dir = { "" = "src" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+kde_cpi = ["py.typed", "data/*.json", "schemas/*.yaml"]
+
+[tool.setuptools_scm]
+fallback_version = "0.0.0"
+write_to = "src/kde_cpi/_version.py"
+local_scheme = "no-local-version"
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 addopts = "-ra -n auto"
 testpaths = ["tests"]
 markers = ["unit", "integration"]
-
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
@@ -88,7 +105,6 @@ docstring-code-format = true
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
 
-
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true
@@ -108,14 +124,21 @@ module = ["asyncpg", "asyncpg.*", "tests.*"]
 ignore_missing_imports = true
 ignore_errors = true
 
-
 [tool.coverage.run]
-source = ["kde_cpi", "cli"]
+source = ["kde_cpi"]
 branch = true
-omit = ["tests/*"]
+omit = ["tests/*", "src/kde_cpi/_version.py"]
 
 [tool.coverage.report]
+fail_under = 85
 show_missing = true
 skip_covered = true
 omit = ["*/__main__.py"]
-exclude_lines = ["if __name__ == .__main__.:", "# pragma: no cover"]
+exclude_lines = ["if __name__ == '__main__':", "# pragma: no cover"]
+
+[tool.coverage.paths]
+source = ["src/kde_cpi", ".tox/*/site-packages/kde_cpi"]
+
+[tool.coverage.html]
+directory = "htmlcov"
+title = "KDE-CPI Coverage Report"

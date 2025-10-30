@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # build notes/assets if you ever add them
-  id-token: write # OIDC for (Test)PyPI Trusted Publisher
+  contents: write
+  id-token: write
   attestations: write
 
 concurrency:
@@ -19,15 +19,20 @@ env:
 
 jobs:
   build:
-    name: Build sdist & wheel
+    name: Build sdist & wheel (from tag)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }} # build exactly the released tag
+          ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
-          persist-credentials: true # needed for git fetch origin main on private repos
+          persist-credentials: true
 
+      # Make sure tags are present for setuptools-scm
+      - name: Ensure tags are fetched
+        run: git fetch --force --tags
+
+      # Safety: ensure the tag is reachable from main (same guard you had)
       - name: Ensure tag commit is on main
         shell: bash
         run: |
@@ -44,31 +49,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            pyproject.toml
-            requirements*.txt
-
-      - name: Verify tag matches project version
-        id: ver
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${{ github.event.release.tag_name }}"
-          TAG="${TAG#v}"
-
-          PYPROJECT_VERSION="$(python - <<'PY'
-          import tomllib, pathlib
-          print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])
-          PY
-          )"
-              echo "file_ver=$PYPROJECT_VERSION" >> "$GITHUB_OUTPUT"
-              echo "tag_ver=$TAG" >> "$GITHUB_OUTPUT"
-
-              if [ "$TAG" != "$PYPROJECT_VERSION" ]; then
-                echo "::error::Tag v$TAG != pyproject version $PYPROJECT_VERSION"
-                exit 1
-              fi
+          cache: "pip"
+          cache-dependency-path: pyproject.toml
 
       - name: Install build tooling
         run: |
@@ -76,7 +58,7 @@ jobs:
           python -m pip install build twine
 
       - name: Build distributions
-        run: python -m build
+        run: python -m build # setuptools-scm reads the tag, bakes version
 
       - name: Twine check
         run: python -m twine check dist/*

@@ -102,6 +102,7 @@ out/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+src/kde_cpi/_version.py
 
 # Sphinx build and generated API docs
 docs/_build/
