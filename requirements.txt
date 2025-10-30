@@ -170,7 +170,7 @@ typing_extensions==4.15.0
 tzdata==2025.2
 uri-template==1.3.0
 urllib3==2.5.0
-virtualenv==20.35.3
+virtualenv==20.35.4
 virtualenv-pyenv==0.5.0
 wcmatch==10.1
 wcwidth==0.2.14
