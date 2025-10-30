@@ -127,7 +127,7 @@ ignore_errors = true
 [tool.coverage.run]
 source = ["kde_cpi"]
 branch = true
-omit = ["tests/*"]
+omit = ["tests/*", "src/kde_cpi/_version.py"]
 
 [tool.coverage.report]
 fail_under = 85
