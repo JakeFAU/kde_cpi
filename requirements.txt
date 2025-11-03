@@ -156,7 +156,7 @@ sphinxcontrib-qthelp==2.0.0
 sphinxcontrib-serializinghtml==2.0.0
 stack-data==0.6.3
 structlog==25.5.0
-termcolor==3.1.0
+termcolor==3.2.0
 terminado==0.18.1
 threadpoolctl==3.6.0
 tinycss2==1.4.0
